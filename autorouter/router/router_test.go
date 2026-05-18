@@ -21,7 +21,7 @@ func newCanvas(width, height, trackWidth int) *canvas.Canvas {
 }
 
 func newRouter(c *canvas.Canvas) *router.TwoLayerRouter {
-	return router.NewTwoLayerRouter(c)
+	return router.NewTwoLayerRouter(c, 1)
 }
 
 // --- basic routing ---

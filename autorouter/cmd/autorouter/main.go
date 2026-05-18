@@ -7,12 +7,11 @@ import (
 	"autorouter/router"
 	"autorouter/session"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 )
-
-const m3TrackWidth = 100 // nm
 
 // --- request ---
 
@@ -38,6 +37,10 @@ func pinsPath() (string, error) {
 }
 
 func main() {
+	m3TrackWidth := flag.Int("m3-track-width", 100, "M3 track width in nm")
+	m2Width := flag.Int("m2-width", 100, "M2 via width in nm")
+	flag.Parse()
+
 	pinPath, err := pinsPath()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -61,14 +64,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	trackCount := (ur.Y - ll.Y) / m3TrackWidth
+	trackCount := (ur.Y - ll.Y) / *m3TrackWidth
 	c := &canvas.Canvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
-		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, m3TrackWidth),
+		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, *m3TrackWidth),
 	}
-	s := session.NewSession(c, router.NewTwoLayerRouter(c), nets)
+	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width), nets)
 	resp := response{Routes: s.Route()}
 
 	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {

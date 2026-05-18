@@ -9,8 +9,6 @@ type Path = common.TwoLayerPath
 type Segment = common.Segment
 type TrackSegment = common.TrackSegment
 
-const M2Width = 1
-
 type Canvas interface {
 	Inbound(p Point) bool
 	IsPassibleM2(seg Segment) bool
@@ -21,11 +19,12 @@ type Canvas interface {
 }
 
 type TwoLayerRouter struct {
-	canvas Canvas
+	canvas  Canvas
+	m2Width int
 }
 
-func NewTwoLayerRouter(c Canvas) *TwoLayerRouter {
-	return &TwoLayerRouter{canvas: c}
+func NewTwoLayerRouter(c Canvas, m2Width int) *TwoLayerRouter {
+	return &TwoLayerRouter{canvas: c, m2Width: m2Width}
 }
 
 func (r *TwoLayerRouter) Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error) {
@@ -62,18 +61,18 @@ func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) (Segment, 
 	trackYUpper := lowerLeft.Y + (trackID+1)*r.canvas.GetM3TrackWidth()
 	m2From := Segment{
 		LowerLeft:  Point{X: from.X, Y: min(from.Y, trackYLower)},
-		UpperRight: Point{X: from.X + M2Width, Y: max(from.Y, trackYUpper)},
+		UpperRight: Point{X: from.X + r.m2Width, Y: max(from.Y, trackYUpper)},
 		NetID:      netID,
 	}
 	m2To := Segment{
 		LowerLeft:  Point{X: to.X, Y: min(to.Y, trackYLower)},
-		UpperRight: Point{X: to.X + M2Width, Y: max(to.Y, trackYUpper)},
+		UpperRight: Point{X: to.X + r.m2Width, Y: max(to.Y, trackYUpper)},
 		NetID:      netID,
 	}
 	m3 := TrackSegment{
 		TrackID: trackID,
 		Start:   min(from.X, to.X),
-		End:     max(from.X, to.X) + M2Width,
+		End:     max(from.X, to.X) + r.m2Width,
 		NetID:   netID,
 	}
 

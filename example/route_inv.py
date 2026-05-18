@@ -25,7 +25,9 @@ SCHEMATIC_FILE = HERE / "inv_schematic.json"
 LIB = "test"
 CELL = "inv"
 
-M3_TRACK_WIDTH_UM = 0.1   # must match the Go binary constant (100 nm)
+M3_TRACK_WIDTH_NM = 400
+M2_WIDTH_NM = 230
+M3_TRACK_WIDTH_UM = M3_TRACK_WIDTH_NM / 1000.0
 M2_LAYER = ("METAL2", "drawing")
 M3_LAYER = ("METAL3", "drawing")
 
@@ -108,7 +110,11 @@ def main() -> int:
     }
 
     proc = subprocess.run(
-        [str(BINARY)],
+        [
+            str(BINARY),
+            f"-m3-track-width={M3_TRACK_WIDTH_NM}",
+            f"-m2-width={M2_WIDTH_NM}",
+        ],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
