@@ -3,6 +3,7 @@ module autorouter
 go 1.25.8
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/google/btree v1.1.3
 	github.com/samber/lo v1.53.0
 	github.com/stretchr/testify v1.11.1

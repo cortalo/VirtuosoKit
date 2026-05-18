@@ -33,3 +33,7 @@ type Net struct {
 	From Point
 	To   Point
 }
+
+type PinDB interface {
+	Query(lib, cell, pin string) (x, y int, err error)
+}

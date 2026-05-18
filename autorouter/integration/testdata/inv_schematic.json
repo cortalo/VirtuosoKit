@@ -1,0 +1,26 @@
+{
+  "instances": [
+    {
+      "name": "M0",
+      "lib": "tsmc18",
+      "cell": "nmos2v",
+      "terms": {
+        "D": "VOUT"
+      }
+    },
+    {
+      "name": "M1",
+      "lib": "tsmc18",
+      "cell": "pmos2v",
+      "terms": {
+        "D": "VOUT"
+      }
+    }
+  ],
+  "nets": {
+    "VOUT": [
+      "M1.D",
+      "M0.D"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+[tsmc18.nmos2v]
+pins = [
+  { name = "D", x = 335, y = 40 },
+  { name = "B", x = 0, y = 0 },
+  { name = "G", x = 0, y = 0 },
+  { name = "S", x = 0, y = 0 },
+]
+
+[tsmc18.pmos2v]
+pins = [
+  { name = "D", x = 335, y = 40 },
+  { name = "B", x = 0, y = 0 },
+  { name = "G", x = 0, y = 0 },
+  { name = "S", x = 0, y = 0 },
+]
