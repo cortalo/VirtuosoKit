@@ -32,14 +32,14 @@ func TestRoute_ClearCanvas_FindsMidTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, trackID)
+	assert.Equal(t, 5, m3.TrackID)
 }
 
 func TestRoute_SameY_FindsMidTrack(t *testing.T) {
@@ -47,24 +47,24 @@ func TestRoute_SameY_FindsMidTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 200},
 		common.Point{X: 900, Y: 200},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 2, trackID)
+	assert.Equal(t, 2, m3.TrackID)
 }
 
 func TestRoute_OutOfBounds_ReturnsError(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	_, err := r.Route(common.Point{X: -1, Y: 0}, common.Point{X: 900, Y: 900}, 1)
+	_, _, _, err := r.Route(common.Point{X: -1, Y: 0}, common.Point{X: 900, Y: 900}, 1)
 	assert.ErrorIs(t, err, router.ErrOutOfBound)
 
-	_, err = r.Route(common.Point{X: 100, Y: 100}, common.Point{X: 1001, Y: 900}, 1)
+	_, _, _, err = r.Route(common.Point{X: 100, Y: 100}, common.Point{X: 1001, Y: 900}, 1)
 	assert.ErrorIs(t, err, router.ErrOutOfBound)
 }
 
@@ -75,14 +75,14 @@ func TestRoute_MidTrackM3Blocked_FallsBackToNeighbor(t *testing.T) {
 	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 99}))
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.True(t, trackID == 4 || trackID == 6)
+	assert.True(t, m3.TrackID == 4 || m3.TrackID == 6)
 }
 
 func TestRoute_M2FromBlocked_SkipsTrack(t *testing.T) {
@@ -95,14 +95,14 @@ func TestRoute_M2FromBlocked_SkipsTrack(t *testing.T) {
 	}))
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.NotEqual(t, 5, trackID)
+	assert.NotEqual(t, 5, m3.TrackID)
 }
 
 func TestRoute_M2ToBlocked_SkipsTrack(t *testing.T) {
@@ -115,14 +115,14 @@ func TestRoute_M2ToBlocked_SkipsTrack(t *testing.T) {
 	}))
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.NotEqual(t, 5, trackID)
+	assert.NotEqual(t, 5, m3.TrackID)
 }
 
 func TestRoute_AllTracksBlocked_ReturnsError(t *testing.T) {
@@ -132,7 +132,7 @@ func TestRoute_AllTracksBlocked_ReturnsError(t *testing.T) {
 	}
 	r := newRouter(c)
 
-	_, err := r.Route(
+	_, _, _, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
@@ -146,14 +146,14 @@ func TestRoute_SameNetID_IgnoresOwnBlocks(t *testing.T) {
 	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 1}))
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, trackID)
+	assert.Equal(t, 5, m3.TrackID)
 }
 
 // --- delta expansion ---
@@ -166,14 +166,14 @@ func TestRoute_MidTrackBlocked_ExpandsSymmetrically(t *testing.T) {
 	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 6, Start: 0, End: 1000, NetID: 99}))
 	r := newRouter(c)
 
-	trackID, err := r.Route(
+	_, _, m3, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 4, trackID)
+	assert.Equal(t, 4, m3.TrackID)
 }
 
 func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
@@ -182,7 +182,7 @@ func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
 	r := newRouter(c)
 
 	// route net1
-	trackID1, err := r.Route(
+	_, _, m3_1, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		1,
@@ -191,18 +191,18 @@ func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
 
 	// mark net1 as occupied
 	require.NoError(t, c.OccupyM3(common.TrackSegment{
-		TrackID: trackID1,
+		TrackID: m3_1.TrackID,
 		Start:   100,
 		End:     900,
 		NetID:   1,
 	}))
 
 	// route net2 with same endpoints, should find different track
-	trackID2, err := r.Route(
+	_, _, m3_2, err := r.Route(
 		common.Point{X: 100, Y: 100},
 		common.Point{X: 900, Y: 900},
 		2,
 	)
 	require.NoError(t, err)
-	assert.NotEqual(t, trackID1, trackID2)
+	assert.NotEqual(t, m3_1.TrackID, m3_2.TrackID)
 }

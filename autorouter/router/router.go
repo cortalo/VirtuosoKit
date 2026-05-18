@@ -28,9 +28,9 @@ func NewTwoLayerRouter(c Canvas) *TwoLayerRouter {
 	return &TwoLayerRouter{canvas: c}
 }
 
-func (r *TwoLayerRouter) Route(from, to Point, netID int) (int, error) {
+func (r *TwoLayerRouter) Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error) {
 	if !r.canvas.Inbound(from) || !r.canvas.Inbound(to) {
-		return 0, ErrOutOfBound
+		return Segment{}, Segment{}, TrackSegment{}, ErrOutOfBound
 	}
 	midY := (from.Y + to.Y) / 2
 	lowerLeft := r.canvas.GetLowerLeft()
@@ -38,22 +38,24 @@ func (r *TwoLayerRouter) Route(from, to Point, netID int) (int, error) {
 	midTrack := (midY - lowerLeft.Y) / r.canvas.GetM3TrackWidth()
 	maxTrack := (upperRight.Y-lowerLeft.Y)/r.canvas.GetM3TrackWidth() - 1
 	for delta := 0; (midTrack+delta <= maxTrack) || (midTrack-delta >= 0); delta++ {
-		if r.tryTrack(from, to, netID, midTrack+delta) {
-			return midTrack + delta, nil
+		m2From, m2To, m3, success := r.tryTrack(from, to, netID, midTrack+delta)
+		if success {
+			return m2From, m2To, m3, nil
 		}
-		if r.tryTrack(from, to, netID, midTrack-delta) {
-			return midTrack - delta, nil
+		m2From, m2To, m3, success = r.tryTrack(from, to, netID, midTrack-delta)
+		if success {
+			return m2From, m2To, m3, nil
 		}
 	}
-	return 0, ErrNoPath
+	return Segment{}, Segment{}, TrackSegment{}, ErrNoPath
 }
 
-func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) bool {
+func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) (Segment, Segment, TrackSegment, bool) {
 	lowerLeft := r.canvas.GetLowerLeft()
 	upperRight := r.canvas.GetUpperRight()
 	maxTrack := (upperRight.Y-lowerLeft.Y)/r.canvas.GetM3TrackWidth() - 1
 	if trackID < 0 || trackID > maxTrack {
-		return false
+		return Segment{}, Segment{}, TrackSegment{}, false
 	}
 
 	trackYLower := lowerLeft.Y + trackID*r.canvas.GetM3TrackWidth()
@@ -75,7 +77,7 @@ func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) bool {
 		NetID:   netID,
 	}
 
-	return r.canvas.IsPassibleM2(m2From) &&
+	return m2From, m2To, m3, r.canvas.IsPassibleM2(m2From) &&
 		r.canvas.IsPassibleM2(m2To) &&
 		r.canvas.IsPassibleM3(m3)
 }

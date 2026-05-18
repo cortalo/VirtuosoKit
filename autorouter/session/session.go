@@ -2,21 +2,22 @@ package session
 
 import (
 	"autorouter/common"
+
+	"github.com/samber/lo"
 )
-import "github.com/samber/lo"
 
 type Point = common.Point
-type Path = common.TwoLayerPath
 type Segment = common.Segment
+type TrackSegment = common.TrackSegment
 type Net = common.Net
 
 type Canvas interface {
-	AddM2(seg Segment) error
-	AddM3(seg Segment) error
+	OccupyM2(seg Segment) error
+	OccupyM3(seg TrackSegment) error
 }
 
 type Router interface {
-	Route(net Net) (Path, error)
+	Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error)
 }
 
 type Session struct {
@@ -25,20 +26,31 @@ type Session struct {
 	nets   []*Net
 }
 
+func NewSession(canvas Canvas, router Router, nets []*Net) *Session {
+	return &Session{canvas: canvas, router: router, nets: nets}
+}
+
 type NetResult struct {
-	Net *Net
-	Err error
+	M2From Segment
+	M2To   Segment
+	M3     TrackSegment
+	Err    error
 }
 
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.nets))
 	for i, net := range s.nets {
-		path, err := s.router.Route(*net)
-		results[i] = NetResult{Net: net, Err: err}
+		m2From, m2To, m3, err := s.router.Route(net.From, net.To, net.ID)
+		results[i] = NetResult{
+			M2From: m2From,
+			M2To:   m2To,
+			M3:     m3,
+			Err:    err,
+		}
 		if err == nil {
-			lo.Must0(s.canvas.AddM2(path.M2Start))
-			lo.Must0(s.canvas.AddM2(path.M2End))
-			lo.Must0(s.canvas.AddM3(path.M3))
+			lo.Must0(s.canvas.OccupyM2(m2From))
+			lo.Must0(s.canvas.OccupyM2(m2To))
+			lo.Must0(s.canvas.OccupyM3(m3))
 		}
 	}
 	return results
