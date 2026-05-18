@@ -1,0 +1,78 @@
+package main
+
+import (
+	"autorouter/canvas"
+	"autorouter/netlist"
+	"autorouter/pindb"
+	"autorouter/router"
+	"autorouter/session"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+const m3TrackWidth = 100 // nm
+
+// --- request ---
+
+type request struct {
+	Layout    netlist.Layout    `json:"layout"`
+	Schematic netlist.Schematic `json:"schematic"`
+}
+
+// --- response ---
+
+type response struct {
+	Routes []session.NetResult `json:"routes"`
+}
+
+// pinsPath returns the path to pins.toml, expected one directory above the binary
+// (i.e. the module root when the binary lives in bin/).
+func pinsPath() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve executable: %w", err)
+	}
+	return filepath.Join(filepath.Dir(exe), "..", "pins.toml"), nil
+}
+
+func main() {
+	pinPath, err := pinsPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	db, err := pindb.Load(pinPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: load pins.toml: %v\n", err)
+		os.Exit(1)
+	}
+
+	var req request
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
+		fmt.Fprintf(os.Stderr, "error: decode request: %v\n", err)
+		os.Exit(1)
+	}
+
+	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
+		os.Exit(1)
+	}
+
+	trackCount := (ur.Y - ll.Y) / m3TrackWidth
+	c := &canvas.Canvas{
+		LowerLeft:  ll,
+		UpperRight: ur,
+		M2Storage:  canvas.NewSegmentStore(ll, ur),
+		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, m3TrackWidth),
+	}
+	s := session.NewSession(c, router.NewTwoLayerRouter(c), nets)
+	resp := response{Routes: s.Route()}
+
+	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {
+		fmt.Fprintf(os.Stderr, "error: encode response: %v\n", err)
+		os.Exit(1)
+	}
+}

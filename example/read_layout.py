@@ -1,33 +1,25 @@
-"""Read the current Virtuoso layout and print it as JSON.
-
-The output has two top-level lists:
-  shapes    – rects, paths, polygons, labels from cv->shapes
-  instances – placed sub-cells from cv->instances
-
-Run with a layout open in Virtuoso:
-    python example/read_layout.py
-    python example/read_layout.py > layout.json
-"""
+"""Read the inverter layout from Virtuoso and save it to inv_layout.json."""
 
 from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 from virtuoso_bridge import VirtuosoClient
 from virtuoso_bridge.virtuoso.layout import parse_layout_geometry_output
 from virtuoso_bridge.virtuoso.layout.ops import layout_read_geometry
 
+LIB = "test"
+CELL = "inv"
+VIEW = "layout"
+OUT = Path(__file__).parent / "inv_layout.json"
+
 
 def main() -> int:
     client = VirtuosoClient.local(port=65432)
 
-    lib, cell, view = client.get_current_design()
-    if not lib or not cell or view != "layout":
-        print("ERROR: open a layout cellview in Virtuoso first.", file=sys.stderr)
-        return 1
-
-    result = client.execute_skill(layout_read_geometry(lib, cell), timeout=30)
+    result = client.execute_skill(layout_read_geometry(LIB, CELL), timeout=30)
     raw = result.output or ""
     if raw.startswith('"ERROR') or raw.startswith("ERROR"):
         print(raw, file=sys.stderr)
@@ -61,13 +53,14 @@ def main() -> int:
             })
 
     output = {
-        "lib": lib,
-        "cell": cell,
-        "view": view,
+        "lib": LIB,
+        "cell": CELL,
+        "view": VIEW,
         "shapes": shapes,
         "instances": instances,
     }
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    OUT.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+    print(f"Saved {len(instances)} instances, {len(shapes)} shapes to {OUT}")
     return 0
 
 

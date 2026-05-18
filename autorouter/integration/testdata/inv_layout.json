@@ -2,7 +2,14 @@
   "lib": "test",
   "cell": "inv",
   "view": "layout",
-  "shapes": [],
+  "shapes": [
+    {
+      "objType": "rect",
+      "layer": "prBoundary",
+      "purpose": "boundary",
+      "bbox": [[-0.5, -0.5], [5.0, 5.0]]
+    }
+  ],
   "instances": [
     {
       "name": "M0",

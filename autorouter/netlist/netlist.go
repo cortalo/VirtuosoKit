@@ -3,6 +3,7 @@ package netlist
 import (
 	"autorouter/common"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -10,59 +11,67 @@ import (
 	"strings"
 )
 
-type layoutInstance struct {
+// Layout mirrors the layout JSON structure.
+type Layout struct {
+	Shapes    []LayoutShape    `json:"shapes"`
+	Instances []LayoutInstance `json:"instances"`
+}
+
+type LayoutShape struct {
+	Layer string        `json:"layer"`
+	BBox  [2][2]float64 `json:"bbox"`
+}
+
+type LayoutInstance struct {
 	Name string     `json:"name"`
 	Lib  string     `json:"lib"`
 	Cell string     `json:"cell"`
 	XY   [2]float64 `json:"xy"`
 }
 
-type layoutFile struct {
-	Instances []layoutInstance `json:"instances"`
-}
-
-type schematicFile struct {
+// Schematic mirrors the schematic JSON structure.
+type Schematic struct {
 	Nets map[string][]string `json:"nets"` // net name → ["inst.pin", ...]
 }
 
-func parseJSON(path string, v any) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("netlist: %w", err)
+var ErrNoPRBoundary = errors.New("netlist: prBoundary shape not found in layout")
+
+func prBoundary(shapes []LayoutShape) (lowerLeft, upperRight common.Point, err error) {
+	for _, s := range shapes {
+		if s.Layer == "prBoundary" {
+			return common.Point{
+					X: int(math.Round(s.BBox[0][0] * 1000)),
+					Y: int(math.Round(s.BBox[0][1] * 1000)),
+				}, common.Point{
+					X: int(math.Round(s.BBox[1][0] * 1000)),
+					Y: int(math.Round(s.BBox[1][1] * 1000)),
+				}, nil
+		}
 	}
-	if err := json.Unmarshal(data, v); err != nil {
-		return fmt.Errorf("netlist: %w", err)
-	}
-	return nil
+	return common.Point{}, common.Point{}, ErrNoPRBoundary
 }
 
-// BuildNets combines a layout JSON, schematic JSON, and pin database into a
-// slice of Nets ready to feed to session.Session.
-// For multi-pin nets, consecutive pin pairs are chained and share the same net ID.
-func BuildNets(layoutPath, schematicPath string, db common.PinDB) ([]*common.Net, error) {
-	var layout layoutFile
-	if err := parseJSON(layoutPath, &layout); err != nil {
-		return nil, err
+// BuildNetsFromData builds nets from already-parsed layout and schematic data.
+// It also returns the lower-left and upper-right corners of the prBoundary shape,
+// converted to nm. For multi-pin nets, consecutive pin pairs are chained and share
+// the same net ID.
+func BuildNetsFromData(layout Layout, schematic Schematic, db common.PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
+	if err != nil {
+		return
 	}
 
-	var schematic schematicFile
-	if err := parseJSON(schematicPath, &schematic); err != nil {
-		return nil, err
-	}
-
-	instByName := make(map[string]layoutInstance, len(layout.Instances))
+	instByName := make(map[string]LayoutInstance, len(layout.Instances))
 	for _, inst := range layout.Instances {
 		instByName[inst.Name] = inst
 	}
 
-	// Sort net names for deterministic net ID assignment.
 	netNames := make([]string, 0, len(schematic.Nets))
 	for name := range schematic.Nets {
 		netNames = append(netNames, name)
 	}
 	sort.Strings(netNames)
 
-	var nets []*common.Net
 	for netID, name := range netNames {
 		instPins := schematic.Nets[name]
 		if len(instPins) < 2 {
@@ -73,20 +82,19 @@ func BuildNets(layoutPath, schematicPath string, db common.PinDB) ([]*common.Net
 		for i, instPin := range instPins {
 			parts := strings.SplitN(instPin, ".", 2)
 			if len(parts) != 2 {
-				return nil, fmt.Errorf("netlist: invalid inst.pin %q in net %q", instPin, name)
+				err = fmt.Errorf("netlist: invalid inst.pin %q in net %q", instPin, name)
+				return
 			}
-			instName, pinName := parts[0], parts[1]
-
-			inst, ok := instByName[instName]
+			inst, ok := instByName[parts[0]]
 			if !ok {
-				return nil, fmt.Errorf("netlist: instance %q not found in layout", instName)
+				err = fmt.Errorf("netlist: instance %q not found in layout", parts[0])
+				return
 			}
-
-			px, py, err := db.Query(inst.Lib, inst.Cell, pinName)
-			if err != nil {
-				return nil, fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, err)
+			px, py, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			if qerr != nil {
+				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
+				return
 			}
-
 			points[i] = common.Point{
 				X: int(math.Round(inst.XY[0]*1000)) + px,
 				Y: int(math.Round(inst.XY[1]*1000)) + py,
@@ -102,5 +110,29 @@ func BuildNets(layoutPath, schematicPath string, db common.PinDB) ([]*common.Net
 		}
 	}
 
-	return nets, nil
+	return
+}
+
+// BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
+func BuildNets(layoutPath, schematicPath string, db common.PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+	var layout Layout
+	if err = parseJSON(layoutPath, &layout); err != nil {
+		return
+	}
+	var schematic Schematic
+	if err = parseJSON(schematicPath, &schematic); err != nil {
+		return
+	}
+	return BuildNetsFromData(layout, schematic, db)
+}
+
+func parseJSON(path string, v any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("netlist: %w", err)
+	}
+	if err := json.Unmarshal(data, v); err != nil {
+		return fmt.Errorf("netlist: %w", err)
+	}
+	return nil
 }

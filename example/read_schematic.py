@@ -1,4 +1,4 @@
-"""Read the test/padring schematic using virtuoso-bridge-lite's built-in reader."""
+"""Read the inverter schematic and save minimal connectivity as JSON."""
 
 import json
 from virtuoso_bridge import VirtuosoClient
@@ -8,29 +8,17 @@ client = VirtuosoClient.local(port=65432)
 
 data = read_schematic(client, "test", "inv")
 
-# Instances
-print(f"=== Instances ({len(data['instances'])}) ===")
-for inst in data["instances"]:
-    print(f"  {inst['name']:20s}  {inst['lib']}/{inst['cell']}")
-    if inst["params"]:
-        for k, v in inst["params"].items():
-            print(f"    {k} = {v}")
-    if inst["terms"]:
-        for term, net in inst["terms"].items():
-            print(f"    .{term} -> {net}")
+minimal = {
+    "instances": [
+        {"name": inst["name"], "lib": inst["lib"], "cell": inst["cell"], "terms": inst["terms"]}
+        for inst in data["instances"]
+    ],
+    "nets": {
+        name: net["connections"]
+        for name, net in data["nets"].items()
+    },
+}
 
-# Nets
-print(f"\n=== Nets ({len(data['nets'])}) ===")
-for net_name, net in data["nets"].items():
-    conns = ", ".join(net["connections"])
-    print(f"  {net_name:20s}  [{conns}]")
-
-# Pins
-print(f"\n=== Pins ({len(data['pins'])}) ===")
-for pin_name, pin in data["pins"].items():
-    print(f"  {pin_name:20s}  {pin['direction']}")
-
-# Dump full result as JSON for inspection
-with open("padring_schematic.json", "w") as f:
-    json.dump(data, f, indent=2)
-print("\nFull data saved to padring_schematic.json")
+with open("inv_schematic.json", "w") as f:
+    json.dump(minimal, f, indent=2)
+print(f"Saved {len(minimal['instances'])} instances, {len(minimal['nets'])} nets to inv_schematic.json")

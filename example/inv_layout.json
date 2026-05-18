@@ -2,7 +2,27 @@
   "lib": "test",
   "cell": "inv",
   "view": "layout",
-  "shapes": [],
+  "shapes": [
+    {
+      "objType": "rect",
+      "layer": "prBoundary",
+      "purpose": "drawing",
+      "bbox": [
+        [
+          -5.0,
+          -5.0
+        ],
+        [
+          10.0,
+          10.0
+        ]
+      ],
+      "points": null,
+      "xy": null,
+      "orient": null,
+      "text": null
+    }
+  ],
   "instances": [
     {
       "name": "M0",
@@ -31,17 +51,17 @@
       "cell": "pmos2v",
       "view": "layout",
       "xy": [
-        0.0,
+        4.0,
         4.0
       ],
       "orient": "\"R0\"",
       "bbox": [
         [
-          -0.91,
+          3.09,
           3.57
         ],
         [
-          1.09,
+          5.09,
           6.43
         ]
       ]

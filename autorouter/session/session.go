@@ -2,6 +2,7 @@ package session
 
 import (
 	"autorouter/common"
+	"encoding/json"
 
 	"github.com/samber/lo"
 )
@@ -31,10 +32,26 @@ func NewSession(canvas Canvas, router Router, nets []*Net) *Session {
 }
 
 type NetResult struct {
-	M2From Segment
-	M2To   Segment
-	M3     TrackSegment
-	Err    error
+	NetID  int          `json:"net_id"`
+	M2From Segment      `json:"m2_from"`
+	M2To   Segment      `json:"m2_to"`
+	M3     TrackSegment `json:"m3"`
+	Err    error        `json:"-"`
+}
+
+func (r NetResult) MarshalJSON() ([]byte, error) {
+	type wire struct {
+		NetID  int          `json:"net_id"`
+		M2From Segment      `json:"m2_from"`
+		M2To   Segment      `json:"m2_to"`
+		M3     TrackSegment `json:"m3"`
+		Error  string       `json:"error,omitempty"`
+	}
+	w := wire{NetID: r.NetID, M2From: r.M2From, M2To: r.M2To, M3: r.M3}
+	if r.Err != nil {
+		w.Error = r.Err.Error()
+	}
+	return json.Marshal(w)
 }
 
 func (s *Session) Route() []NetResult {
@@ -42,6 +59,7 @@ func (s *Session) Route() []NetResult {
 	for i, net := range s.nets {
 		m2From, m2To, m3, err := s.router.Route(net.From, net.To, net.ID)
 		results[i] = NetResult{
+			NetID:  net.ID,
 			M2From: m2From,
 			M2To:   m2To,
 			M3:     m3,

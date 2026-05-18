@@ -1,13 +1,14 @@
 package common
 
 type Point struct {
-	X, Y int
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 type Segment struct {
-	LowerLeft  Point
-	UpperRight Point
-	NetID      int
+	LowerLeft  Point `json:"lower_left"`
+	UpperRight Point `json:"upper_right"`
+	NetID      int   `json:"net_id"`
 }
 
 func (s Segment) Overlap(other Segment) bool {
@@ -16,10 +17,10 @@ func (s Segment) Overlap(other Segment) bool {
 }
 
 type TrackSegment struct {
-	TrackID int
-	Start   int
-	End     int
-	NetID   int
+	TrackID int `json:"track_id"`
+	Start   int `json:"start"`
+	End     int `json:"end"`
+	NetID   int `json:"net_id"`
 }
 
 type TwoLayerPath struct {

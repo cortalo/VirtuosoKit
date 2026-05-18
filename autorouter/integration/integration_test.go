@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"autorouter/canvas"
-	"autorouter/common"
 	"autorouter/netlist"
 	"autorouter/pindb"
 	"autorouter/router"
@@ -25,7 +24,9 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 	db, err := pindb.Load("testdata/pins.toml")
 	require.NoError(t, err)
 
-	nets, err := netlist.BuildNets(
+	const m3TrackWidth = 100
+
+	ll, ur, nets, err := netlist.BuildNets(
 		"testdata/inv_layout.json",
 		"testdata/inv_schematic.json",
 		db,
@@ -33,11 +34,12 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, nets, 1)
 
+	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
 	c := &canvas.Canvas{
-		LowerLeft:  common.Point{X: 0, Y: 0},
-		UpperRight: common.Point{X: 1000_000, Y: 1000_000},
-		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000_000, Y: 1000_000}),
-		M3Storage:  canvas.NewTrackSegmentStorage(10_000, 100),
+		LowerLeft:  ll,
+		UpperRight: ur,
+		M2Storage:  canvas.NewSegmentStore(ll, ur),
+		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
 	}
 	r := router.NewTwoLayerRouter(c)
 	s := session.NewSession(c, r, nets)
