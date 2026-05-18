@@ -1,0 +1,44 @@
+{
+  "instances": [
+    {
+      "name": "M0",
+      "lib": "tsmc18",
+      "cell": "nmos2v",
+      "terms": {
+        "D": "VOUT",
+        "B": "VSS",
+        "G": "VIN",
+        "S": "VSS"
+      }
+    },
+    {
+      "name": "M1",
+      "lib": "tsmc18",
+      "cell": "pmos2v",
+      "terms": {
+        "D": "VOUT",
+        "B": "VDD",
+        "G": "VIN",
+        "S": "VDD"
+      }
+    }
+  ],
+  "nets": {
+    "VIN": [
+      "M1.G",
+      "M0.G"
+    ],
+    "VOUT": [
+      "M1.D",
+      "M0.D"
+    ],
+    "VDD": [
+      "M1.S",
+      "M1.B"
+    ],
+    "VSS": [
+      "M0.S",
+      "M0.B"
+    ]
+  }
+}

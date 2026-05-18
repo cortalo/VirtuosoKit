@@ -1,0 +1,50 @@
+{
+  "lib": "test",
+  "cell": "inv",
+  "view": "layout",
+  "shapes": [],
+  "instances": [
+    {
+      "name": "M0",
+      "lib": "tsmc18",
+      "cell": "nmos2v",
+      "view": "layout",
+      "xy": [
+        0.0,
+        0.0
+      ],
+      "orient": "\"R0\"",
+      "bbox": [
+        [
+          -0.66,
+          -0.35
+        ],
+        [
+          0.84,
+          2.35
+        ]
+      ]
+    },
+    {
+      "name": "M1",
+      "lib": "tsmc18",
+      "cell": "pmos2v",
+      "view": "layout",
+      "xy": [
+        0.0,
+        4.0
+      ],
+      "orient": "\"R0\"",
+      "bbox": [
+        [
+          -0.91,
+          3.57
+        ],
+        [
+          1.09,
+          6.43
+        ]
+      ]
+    }
+  ]
+}

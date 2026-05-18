@@ -6,7 +6,7 @@ from virtuoso_bridge.virtuoso.schematic.reader import read_schematic
 
 client = VirtuosoClient.local(port=65432)
 
-data = read_schematic(client, "test", "padring")
+data = read_schematic(client, "test", "inv")
 
 # Instances
 print(f"=== Instances ({len(data['instances'])}) ===")
