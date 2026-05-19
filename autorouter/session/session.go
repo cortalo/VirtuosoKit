@@ -43,7 +43,7 @@ type NetResult struct {
 func (r NetResult) MarshalJSON() ([]byte, error) {
 	type wire struct {
 		NetID    int       `json:"net_id"`
-		Segments []Segment `json:"segments"`
+		Segments []Segment `json:"segments,omitempty"`
 		Error    string    `json:"error,omitempty"`
 	}
 	w := wire{NetID: r.NetID, Segments: r.Segments}
@@ -80,13 +80,45 @@ func (s *Session) Route() []NetResult {
 			Layer:      common.M3,
 		}
 
-		results[i] = NetResult{NetID: net.ID, Segments: []Segment{m2From, m3Seg, m2To}}
+		segs := []Segment{m2From, m3Seg, m2To}
+		segs = appendVia(segs, pinBBox(net.From), m2From, common.Via12, net.ID)
+		segs = appendVia(segs, m2From, m3Seg, common.Via23, net.ID)
+		segs = appendVia(segs, m2To, m3Seg, common.Via23, net.ID)
+		segs = appendVia(segs, pinBBox(net.To), m2To, common.Via12, net.ID)
+
+		results[i] = NetResult{NetID: net.ID, Segments: segs}
 
 		lo.Must0(s.canvas.OccupyM2(m2From))
 		lo.Must0(s.canvas.OccupyM2(m2To))
 		lo.Must0(s.canvas.OccupyM3(m3))
 	}
 	return results
+}
+
+// appendVia computes the intersection of a and b; if non-degenerate, appends it to segs.
+func appendVia(segs []Segment, a, b Segment, layer common.Layer, netID int) []Segment {
+	x0 := max(a.LowerLeft.X, b.LowerLeft.X)
+	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y)
+	x1 := min(a.UpperRight.X, b.UpperRight.X)
+	y1 := min(a.UpperRight.Y, b.UpperRight.Y)
+	if x0 >= x1 || y0 >= y1 {
+		return segs
+	}
+	return append(segs, Segment{
+		LowerLeft:  Point{X: x0, Y: y0},
+		UpperRight: Point{X: x1, Y: y1},
+		NetID:      netID,
+		Layer:      layer,
+	})
+}
+
+// pinBBox converts a RoutingPin to its bounding-box Segment.
+// When XHigh <= XLow the bbox is degenerate and appendVia will discard it.
+func pinBBox(pin RoutingPin) Segment {
+	return Segment{
+		LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
+		UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
+	}
 }
 
 func extendM2ToCoverPin(m2 Segment, pin RoutingPin) Segment {

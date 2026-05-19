@@ -12,7 +12,7 @@ import (
 )
 
 type PinDB interface {
-	Query(lib, cell, pin string) (xLow, yLow, yHigh int, err error)
+	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, err error)
 }
 
 // Layout mirrors the layout JSON structure.
@@ -123,7 +123,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			if _, skip := ignoredLibs[inst.Lib]; skip {
 				continue
 			}
-			xLow, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			xLow, xHigh, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
 				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
 				return
@@ -132,6 +132,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			instY := int(math.Round(inst.XY[1] * 1000))
 			pins = append(pins, common.RoutingPin{
 				XLow:  instX + xLow,
+				XHigh: instX + xHigh,
 				YLow:  instY + yLow,
 				YHigh: instY + yHigh,
 			})

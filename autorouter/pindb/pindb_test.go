@@ -57,9 +57,10 @@ func TestQuery_ReturnsCorrectCoordinates(t *testing.T) {
 	db, err := pindb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	xLow, yLow, yHigh, err := db.Query("tsmc18", "nmos2v", "D")
+	xLow, xHigh, yLow, yHigh, err := db.Query("tsmc18", "nmos2v", "D")
 	require.NoError(t, err)
 	assert.Equal(t, 10, xLow)
+	assert.Equal(t, 30, xHigh)
 	assert.Equal(t, 20, yLow)
 	assert.Equal(t, 50, yHigh)
 }
@@ -68,9 +69,10 @@ func TestQuery_DifferentLibAndCell(t *testing.T) {
 	db, err := pindb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	xLow, yLow, yHigh, err := db.Query("other", "cell1", "A")
+	xLow, xHigh, yLow, yHigh, err := db.Query("other", "cell1", "A")
 	require.NoError(t, err)
 	assert.Equal(t, 1, xLow)
+	assert.Equal(t, 3, xHigh)
 	assert.Equal(t, 2, yLow)
 	assert.Equal(t, 4, yHigh)
 }
@@ -79,7 +81,7 @@ func TestQuery_LibNotFound(t *testing.T) {
 	db, err := pindb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, err = db.Query("unknown", "nmos2v", "D")
+	_, _, _, _, err = db.Query("unknown", "nmos2v", "D")
 	assert.ErrorIs(t, err, pindb.ErrLibNotFound)
 }
 
@@ -87,7 +89,7 @@ func TestQuery_CellNotFound(t *testing.T) {
 	db, err := pindb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, err = db.Query("tsmc18", "unknown", "D")
+	_, _, _, _, err = db.Query("tsmc18", "unknown", "D")
 	assert.ErrorIs(t, err, pindb.ErrCellNotFound)
 }
 
@@ -95,6 +97,6 @@ func TestQuery_PinNotFound(t *testing.T) {
 	db, err := pindb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
+	_, _, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
 	assert.ErrorIs(t, err, pindb.ErrPinNotFound)
 }
