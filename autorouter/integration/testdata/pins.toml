@@ -1,15 +1,15 @@
 [tsmc18.nmos2v]
 pins = [
-  { name = "D", x = 335, y = 40 },
-  { name = "B", x = 0, y = 0 },
-  { name = "G", x = 0, y = 0 },
-  { name = "S", x = 0, y = 0 },
+  { name = "D", ll = [335, 40],  ur = [565, 1960] },
+  { name = "B", ll = [0, 0],     ur = [100, 100] },
+  { name = "G", ll = [0, 0],     ur = [100, 100] },
+  { name = "S", ll = [0, 0],     ur = [100, 100] },
 ]
 
 [tsmc18.pmos2v]
 pins = [
-  { name = "D", x = 335, y = 40 },
-  { name = "B", x = 0, y = 0 },
-  { name = "G", x = 0, y = 0 },
-  { name = "S", x = 0, y = 0 },
+  { name = "D", ll = [335, 40],  ur = [565, 1960] },
+  { name = "B", ll = [0, 0],     ur = [100, 100] },
+  { name = "G", ll = [0, 0],     ur = [100, 100] },
+  { name = "S", ll = [0, 0],     ur = [100, 100] },
 ]

@@ -11,6 +11,10 @@ import (
 	"strings"
 )
 
+type PinDB interface {
+	Query(lib, cell, pin string) (xLow, yLow, yHigh int, err error)
+}
+
 // Layout mirrors the layout JSON structure.
 type Layout struct {
 	Shapes    []LayoutShape    `json:"shapes"`
@@ -55,7 +59,7 @@ func prBoundary(shapes []LayoutShape) (lowerLeft, upperRight common.Point, err e
 // It also returns the lower-left and upper-right corners of the prBoundary shape,
 // converted to nm. For multi-pin nets, consecutive pin pairs are chained and share
 // the same net ID.
-func BuildNetsFromData(layout Layout, schematic Schematic, db common.PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
 	if err != nil {
 		return
@@ -78,7 +82,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db common.PinDB) (low
 			continue
 		}
 
-		points := make([]common.Point, len(instPins))
+		pins := make([]common.RoutingPin, len(instPins))
 		for i, instPin := range instPins {
 			parts := strings.SplitN(instPin, ".", 2)
 			if len(parts) != 2 {
@@ -90,22 +94,25 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db common.PinDB) (low
 				err = fmt.Errorf("netlist: instance %q not found in layout", parts[0])
 				return
 			}
-			px, py, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			xLow, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
 				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
 				return
 			}
-			points[i] = common.Point{
-				X: int(math.Round(inst.XY[0]*1000)) + px,
-				Y: int(math.Round(inst.XY[1]*1000)) + py,
+			instX := int(math.Round(inst.XY[0] * 1000))
+			instY := int(math.Round(inst.XY[1] * 1000))
+			pins[i] = common.RoutingPin{
+				XLow:  instX + xLow,
+				YLow:  instY + yLow,
+				YHigh: instY + yHigh,
 			}
 		}
 
-		for i := 0; i < len(points)-1; i++ {
+		for i := 0; i < len(pins)-1; i++ {
 			nets = append(nets, &common.Net{
 				ID:   netID + 1,
-				From: points[i],
-				To:   points[i+1],
+				From: pins[i],
+				To:   pins[i+1],
 			})
 		}
 	}
@@ -114,7 +121,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db common.PinDB) (low
 }
 
 // BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
-func BuildNets(layoutPath, schematicPath string, db common.PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+func BuildNets(layoutPath, schematicPath string, db PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	var layout Layout
 	if err = parseJSON(layoutPath, &layout); err != nil {
 		return

@@ -5,7 +5,6 @@ import (
 )
 
 type Point = common.Point
-type Path = common.TwoLayerPath
 type Segment = common.Segment
 type TrackSegment = common.TrackSegment
 

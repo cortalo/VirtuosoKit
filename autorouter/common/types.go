@@ -23,18 +23,17 @@ type TrackSegment struct {
 	NetID   int `json:"net_id"`
 }
 
-type TwoLayerPath struct {
-	M2Start Segment
-	M2End   Segment
-	M3      Segment
+// RoutingPin is a physical pin access point from the router's perspective.
+// XLow/YLow is the bottom-left corner of the pin bbox (M2 anchor).
+// YHigh is the top of the pin bbox, used by the session to extend M2 coverage.
+type RoutingPin struct {
+	XLow  int
+	YLow  int
+	YHigh int
 }
 
 type Net struct {
 	ID   int
-	From Point
-	To   Point
-}
-
-type PinDB interface {
-	Query(lib, cell, pin string) (x, y int, err error)
+	From RoutingPin
+	To   RoutingPin
 }

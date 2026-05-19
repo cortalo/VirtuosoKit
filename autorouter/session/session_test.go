@@ -46,7 +46,11 @@ func (m *mockCanvas) OccupyM3(seg TrackSegment) error {
 // --- helpers ---
 
 func makeNet(id, fx, fy, tx, ty int) *Net {
-	return &Net{ID: id, From: Point{X: fx, Y: fy}, To: Point{X: tx, Y: ty}}
+	return &Net{
+		ID:   id,
+		From: RoutingPin{XLow: fx, YLow: fy, YHigh: fy},
+		To:   RoutingPin{XLow: tx, YLow: ty, YHigh: ty},
+	}
 }
 
 func seg(x0, y0, x1, y1, netID int) Segment {

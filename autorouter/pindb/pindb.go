@@ -15,8 +15,8 @@ var (
 
 type Pin struct {
 	Name string `toml:"name"`
-	X    int    `toml:"x"`
-	Y    int    `toml:"y"`
+	LL   [2]int `toml:"ll"`
+	UR   [2]int `toml:"ur"`
 }
 
 type cell struct {
@@ -35,19 +35,19 @@ func Load(path string) (*DB, error) {
 	return &DB{libs: raw}, nil
 }
 
-func (db *DB) Query(lib, cellName, pinName string) (x, y int, err error) {
+func (db *DB) Query(lib, cellName, pinName string) (xLow, yLow, yHigh int, err error) {
 	cells, ok := db.libs[lib]
 	if !ok {
-		return 0, 0, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+		return 0, 0, 0, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
 	}
 	c, ok := cells[cellName]
 	if !ok {
-		return 0, 0, fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
+		return 0, 0, 0, fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
 	}
 	for _, p := range c.Pins {
 		if p.Name == pinName {
-			return p.X, p.Y, nil
+			return p.LL[0], p.LL[1], p.UR[1], nil
 		}
 	}
-	return 0, 0, fmt.Errorf("%w: %s", ErrPinNotFound, pinName)
+	return 0, 0, 0, fmt.Errorf("%w: %s", ErrPinNotFound, pinName)
 }

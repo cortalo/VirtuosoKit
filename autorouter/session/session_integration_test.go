@@ -23,7 +23,7 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 }
 
 func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
-	nets := []*common.Net{{ID: 1, From: common.Point{X: 100, Y: 100}, To: common.Point{X: 900, Y: 900}}}
+	nets := []*common.Net{{ID: 1, From: common.RoutingPin{XLow: 100, YLow: 100, YHigh: 100}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}}}
 	s := newIntegrationSession(nets)
 
 	results := s.Route()
@@ -39,8 +39,8 @@ func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 	// upper edge (500) equals net 1's lower edge (500) — strict inequality means
 	// no overlap — so net 2 is forced to track 4.
 	nets := []*common.Net{
-		{ID: 1, From: common.Point{X: 0, Y: 500}, To: common.Point{X: 900, Y: 500}},
-		{ID: 2, From: common.Point{X: 0, Y: 500}, To: common.Point{X: 900, Y: 500}},
+		{ID: 1, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
+		{ID: 2, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
 	}
 	s := newIntegrationSession(nets)
 
@@ -55,7 +55,7 @@ func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 
 func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {
 	nets := []*common.Net{
-		{ID: 1, From: common.Point{X: -1, Y: 0}, To: common.Point{X: 900, Y: 900}},
+		{ID: 1, From: common.RoutingPin{XLow: -1, YLow: 0, YHigh: 0}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
 	}
 	s := newIntegrationSession(nets)
 
@@ -67,8 +67,8 @@ func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {
 
 func TestIntegration_MixedNets_SuccessAndError(t *testing.T) {
 	nets := []*common.Net{
-		{ID: 1, From: common.Point{X: 100, Y: 100}, To: common.Point{X: 900, Y: 900}},
-		{ID: 2, From: common.Point{X: -1, Y: 0}, To: common.Point{X: 900, Y: 900}},
+		{ID: 1, From: common.RoutingPin{XLow: 100, YLow: 100, YHigh: 100}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
+		{ID: 2, From: common.RoutingPin{XLow: -1, YLow: 0, YHigh: 0}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
 	}
 	s := newIntegrationSession(nets)
 

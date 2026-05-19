@@ -10,6 +10,7 @@ import (
 type Point = common.Point
 type Segment = common.Segment
 type TrackSegment = common.TrackSegment
+type RoutingPin = common.RoutingPin
 type Net = common.Net
 
 type Canvas interface {
@@ -57,7 +58,15 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.nets))
 	for i, net := range s.nets {
-		m2From, m2To, m3, err := s.router.Route(net.From, net.To, net.ID)
+		m2From, m2To, m3, err := s.router.Route(
+			Point{X: net.From.XLow, Y: net.From.YLow},
+			Point{X: net.To.XLow, Y: net.To.YLow},
+			net.ID,
+		)
+		if err == nil {
+			m2From = extendM2ToCoverPin(m2From, net.From)
+			m2To = extendM2ToCoverPin(m2To, net.To)
+		}
 		results[i] = NetResult{
 			NetID:  net.ID,
 			M2From: m2From,
@@ -72,4 +81,12 @@ func (s *Session) Route() []NetResult {
 		}
 	}
 	return results
+}
+
+func extendM2ToCoverPin(m2 Segment, pin RoutingPin) Segment {
+	return Segment{
+		LowerLeft:  Point{X: m2.LowerLeft.X, Y: min(m2.LowerLeft.Y, pin.YLow)},
+		UpperRight: Point{X: m2.UpperRight.X, Y: max(m2.UpperRight.Y, pin.YHigh)},
+		NetID:      m2.NetID,
+	}
 }
