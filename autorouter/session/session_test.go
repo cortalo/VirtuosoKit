@@ -1,6 +1,7 @@
 package session
 
 import (
+	"autorouter/common"
 	"errors"
 	"testing"
 
@@ -18,7 +19,7 @@ type routeResult struct {
 }
 
 type mockRouter struct {
-	results []routeResult // consumed in order, one per Route call
+	results []routeResult
 	calls   int
 }
 
@@ -43,6 +44,9 @@ func (m *mockCanvas) OccupyM3(seg TrackSegment) error {
 	return nil
 }
 
+func (m *mockCanvas) GetLowerLeft() Point  { return Point{X: 0, Y: 0} }
+func (m *mockCanvas) GetM3TrackWidth() int { return 100 }
+
 // --- helpers ---
 
 func makeNet(id, fx, fy, tx, ty int) *Net {
@@ -59,6 +63,17 @@ func seg(x0, y0, x1, y1, netID int) Segment {
 
 func track(trackID, start, end, netID int) TrackSegment {
 	return TrackSegment{TrackID: trackID, Start: start, End: end, NetID: netID}
+}
+
+// expectedM3Seg converts a TrackSegment to the Segment the session will produce
+// using the mockCanvas geometry (LowerLeft={0,0}, trackWidth=100).
+func expectedM3Seg(ts TrackSegment) Segment {
+	return Segment{
+		LowerLeft:  Point{X: ts.Start, Y: ts.TrackID * 100},
+		UpperRight: Point{X: ts.End, Y: (ts.TrackID + 1) * 100},
+		NetID:      ts.NetID,
+		Layer:      common.M3,
+	}
 }
 
 // --- tests ---
@@ -82,9 +97,15 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.NoError(t, results[0].Err)
-	assert.Equal(t, m2From, results[0].M2From)
-	assert.Equal(t, m2To, results[0].M2To)
-	assert.Equal(t, m3, results[0].M3)
+	require.Len(t, results[0].Segments, 3)
+
+	wantM2From := m2From
+	wantM2From.Layer = common.M2
+	wantM2To := m2To
+	wantM2To.Layer = common.M2
+	assert.Equal(t, wantM2From, results[0].Segments[0])
+	assert.Equal(t, expectedM3Seg(m3), results[0].Segments[1])
+	assert.Equal(t, wantM2To, results[0].Segments[2])
 }
 
 func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
@@ -98,7 +119,11 @@ func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
 
 	s.Route()
 
-	assert.Equal(t, []Segment{m2From, m2To}, canvas.m2Calls)
+	wantM2From := m2From
+	wantM2From.Layer = common.M2
+	wantM2To := m2To
+	wantM2To.Layer = common.M2
+	assert.Equal(t, []Segment{wantM2From, wantM2To}, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{m3}, canvas.m3Calls)
 }
 
@@ -133,7 +158,16 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
-	assert.Equal(t, []Segment{r1.m2From, r1.m2To, r2.m2From, r2.m2To}, canvas.m2Calls)
+
+	wantM2s := func(r routeResult) (Segment, Segment) {
+		f, to := r.m2From, r.m2To
+		f.Layer = common.M2
+		to.Layer = common.M2
+		return f, to
+	}
+	f1, to1 := wantM2s(r1)
+	f2, to2 := wantM2s(r2)
+	assert.Equal(t, []Segment{f1, to1, f2, to2}, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{r1.m3, r2.m3}, canvas.m3Calls)
 }
 
@@ -155,7 +189,12 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.NoError(t, results[0].Err)
 	assert.ErrorIs(t, results[1].Err, routeErr)
-	assert.Equal(t, []Segment{r1.m2From, r1.m2To}, canvas.m2Calls)
+
+	wantFrom := r1.m2From
+	wantFrom.Layer = common.M2
+	wantTo := r1.m2To
+	wantTo.Layer = common.M2
+	assert.Equal(t, []Segment{wantFrom, wantTo}, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{r1.m3}, canvas.m3Calls)
 }
 
@@ -177,6 +216,10 @@ func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.ErrorIs(t, results[0].Err, routeErr)
 	assert.NoError(t, results[1].Err)
-	assert.Equal(t, r2.m2From, results[1].M2From)
-	assert.Equal(t, r2.m3, results[1].M3)
+	require.Len(t, results[1].Segments, 3)
+
+	wantFrom := r2.m2From
+	wantFrom.Layer = common.M2
+	assert.Equal(t, wantFrom, results[1].Segments[0])
+	assert.Equal(t, expectedM3Seg(r2.m3), results[1].Segments[1])
 }

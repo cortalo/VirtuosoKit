@@ -22,6 +22,14 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 	return session.NewSession(c, r, nets)
 }
 
+// trackIDFromResult extracts the M3 track ID from the middle segment of a NetResult.
+// The session always returns segments in order [m2From, m3, m2To].
+// trackWidth is the canvas M3 track width (100 in integration tests).
+func trackIDFromResult(res session.NetResult, trackWidth int) int {
+	m3Seg := res.Segments[1]
+	return m3Seg.LowerLeft.Y / trackWidth
+}
+
 func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
 	nets := []*common.Net{{ID: 1, From: common.RoutingPin{XLow: 100, YLow: 100, YHigh: 100}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}}}
 	s := newIntegrationSession(nets)
@@ -30,13 +38,10 @@ func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.NoError(t, results[0].Err)
-	assert.Equal(t, 5, results[0].M3.TrackID)
+	assert.Equal(t, 5, trackIDFromResult(results[0], 100))
 }
 
 func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
-	// Both nets share the same endpoints at Y=500 (midTrack=5).
-	// Net 1 occupies track 5. Spacing rule forbids tracks 4 and 6 (adjacent to 5),
-	// so net 2 is forced to track 3.
 	nets := []*common.Net{
 		{ID: 1, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
 		{ID: 2, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
@@ -48,8 +53,8 @@ func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
-	assert.Equal(t, 5, results[0].M3.TrackID)
-	assert.Equal(t, 3, results[1].M3.TrackID)
+	assert.Equal(t, 5, trackIDFromResult(results[0], 100))
+	assert.Equal(t, 3, trackIDFromResult(results[1], 100))
 }
 
 func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {

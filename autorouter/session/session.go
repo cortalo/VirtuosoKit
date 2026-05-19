@@ -16,6 +16,8 @@ type Net = common.Net
 type Canvas interface {
 	OccupyM2(seg Segment) error
 	OccupyM3(seg TrackSegment) error
+	GetLowerLeft() Point
+	GetM3TrackWidth() int
 }
 
 type Router interface {
@@ -33,22 +35,18 @@ func NewSession(canvas Canvas, router Router, nets []*Net) *Session {
 }
 
 type NetResult struct {
-	NetID  int          `json:"net_id"`
-	M2From Segment      `json:"m2_from"`
-	M2To   Segment      `json:"m2_to"`
-	M3     TrackSegment `json:"m3"`
-	Err    error        `json:"-"`
+	NetID    int       `json:"net_id"`
+	Segments []Segment `json:"segments"`
+	Err      error     `json:"-"`
 }
 
 func (r NetResult) MarshalJSON() ([]byte, error) {
 	type wire struct {
-		NetID  int          `json:"net_id"`
-		M2From Segment      `json:"m2_from"`
-		M2To   Segment      `json:"m2_to"`
-		M3     TrackSegment `json:"m3"`
-		Error  string       `json:"error,omitempty"`
+		NetID    int       `json:"net_id"`
+		Segments []Segment `json:"segments"`
+		Error    string    `json:"error,omitempty"`
 	}
-	w := wire{NetID: r.NetID, M2From: r.M2From, M2To: r.M2To, M3: r.M3}
+	w := wire{NetID: r.NetID, Segments: r.Segments}
 	if r.Err != nil {
 		w.Error = r.Err.Error()
 	}
@@ -63,22 +61,30 @@ func (s *Session) Route() []NetResult {
 			Point{X: net.To.XLow, Y: net.To.YLow},
 			net.ID,
 		)
-		if err == nil {
-			m2From = extendM2ToCoverPin(m2From, net.From)
-			m2To = extendM2ToCoverPin(m2To, net.To)
+		if err != nil {
+			results[i] = NetResult{NetID: net.ID, Err: err}
+			continue
 		}
-		results[i] = NetResult{
-			NetID:  net.ID,
-			M2From: m2From,
-			M2To:   m2To,
-			M3:     m3,
-			Err:    err,
+
+		m2From = extendM2ToCoverPin(m2From, net.From)
+		m2To = extendM2ToCoverPin(m2To, net.To)
+		m2From.Layer = common.M2
+		m2To.Layer = common.M2
+
+		ll := s.canvas.GetLowerLeft()
+		tw := s.canvas.GetM3TrackWidth()
+		m3Seg := Segment{
+			LowerLeft:  Point{X: m3.Start, Y: ll.Y + m3.TrackID*tw},
+			UpperRight: Point{X: m3.End, Y: ll.Y + (m3.TrackID+1)*tw},
+			NetID:      m3.NetID,
+			Layer:      common.M3,
 		}
-		if err == nil {
-			lo.Must0(s.canvas.OccupyM2(m2From))
-			lo.Must0(s.canvas.OccupyM2(m2To))
-			lo.Must0(s.canvas.OccupyM3(m3))
-		}
+
+		results[i] = NetResult{NetID: net.ID, Segments: []Segment{m2From, m3Seg, m2To}}
+
+		lo.Must0(s.canvas.OccupyM2(m2From))
+		lo.Must0(s.canvas.OccupyM2(m2To))
+		lo.Must0(s.canvas.OccupyM3(m3))
 	}
 	return results
 }
