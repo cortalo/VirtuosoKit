@@ -13,3 +13,6 @@ __pycache__/
 autorouter/pins.toml
 autorouter/drcs.toml
 autorouter/bin
+autorouter/.claude
+placer/cells.toml
+placer/bin

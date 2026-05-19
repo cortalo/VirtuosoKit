@@ -1,0 +1,16 @@
+{
+  "instances": [
+    {
+      "name": "I1",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T",
+      "xy": [-0.53125, 0.0]
+    },
+    {
+      "name": "I0",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T",
+      "xy": [-0.96875, 0.0]
+    }
+  ]
+}

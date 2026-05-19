@@ -1,0 +1,70 @@
+{
+  "instances": [
+    {
+      "name": "I26",
+      "lib": "tcb018gbwp7t",
+      "cell": "TIEHBWP7T",
+      "xy": [-2.4625000000000004, 2.03125]
+    },
+    {
+      "name": "I39",
+      "lib": "tcb018gbwp7t",
+      "cell": "TIEHBWP7T",
+      "xy": [-2.5875000000000004, -1.46875]
+    },
+    {
+      "name": "I47",
+      "lib": "basic",
+      "cell": "noConn",
+      "xy": [-0.60625, 1.5]
+    },
+    {
+      "name": "I48",
+      "lib": "basic",
+      "cell": "noConn",
+      "xy": [-0.73125, -1.375]
+    },
+    {
+      "name": "I28",
+      "lib": "tcb018gbwp7t",
+      "cell": "DFCND1BWP7T",
+      "xy": [-1.375, 1.65625]
+    },
+    {
+      "name": "I27",
+      "lib": "tcb018gbwp7t",
+      "cell": "DFCND1BWP7T",
+      "xy": [-1.375, -1.53125]
+    },
+    {
+      "name": "I42",
+      "lib": "tcb018gbwp7t",
+      "cell": "DEL4BWP7T",
+      "xy": [1.6875, 0.125]
+    },
+    {
+      "name": "I41",
+      "lib": "tcb018gbwp7t",
+      "cell": "DEL4BWP7T",
+      "xy": [0.9375, 0.125]
+    },
+    {
+      "name": "I38",
+      "lib": "tcb018gbwp7t",
+      "cell": "DEL4BWP7T",
+      "xy": [0.1875, 0.125]
+    },
+    {
+      "name": "I11",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T",
+      "xy": [-0.59375, 0.125]
+    },
+    {
+      "name": "I43",
+      "lib": "tcb018gbwp7t",
+      "cell": "AN2D1BWP7T",
+      "xy": [2.3125, 0.125]
+    }
+  ]
+}
