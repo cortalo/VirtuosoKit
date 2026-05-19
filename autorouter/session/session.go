@@ -27,15 +27,16 @@ type Router interface {
 type ViaConfig = common.ViaConfig
 
 type Session struct {
-	canvas Canvas
-	router Router
-	nets   []*Net
-	via12  ViaConfig
-	via23  ViaConfig
+	canvas   Canvas
+	router   Router
+	nets     []*Net
+	via12    ViaConfig
+	via23    ViaConfig
+	m2EndExt int
 }
 
-func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig) *Session {
-	return &Session{canvas: canvas, router: router, nets: nets, via12: via12, via23: via23}
+func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig, m2EndExt int) *Session {
+	return &Session{canvas: canvas, router: router, nets: nets, via12: via12, via23: via23, m2EndExt: m2EndExt}
 }
 
 type NetResult struct {
@@ -70,8 +71,8 @@ func (s *Session) Route() []NetResult {
 			continue
 		}
 
-		m2From = extendM2ToCoverPin(m2From, net.From)
-		m2To = extendM2ToCoverPin(m2To, net.To)
+		m2From = extendM2ToCoverPin(m2From, net.From, s.m2EndExt)
+		m2To = extendM2ToCoverPin(m2To, net.To, s.m2EndExt)
 		m2From.Layer = common.M2
 		m2To.Layer = common.M2
 
@@ -139,10 +140,10 @@ func pinBBox(pin RoutingPin) Segment {
 	}
 }
 
-func extendM2ToCoverPin(m2 Segment, pin RoutingPin) Segment {
+func extendM2ToCoverPin(m2 Segment, pin RoutingPin, endExt int) Segment {
 	return Segment{
-		LowerLeft:  Point{X: m2.LowerLeft.X, Y: min(m2.LowerLeft.Y, pin.YLow)},
-		UpperRight: Point{X: m2.UpperRight.X, Y: max(m2.UpperRight.Y, pin.YHigh)},
+		LowerLeft:  Point{X: m2.LowerLeft.X, Y: min(m2.LowerLeft.Y, pin.YLow-endExt)},
+		UpperRight: Point{X: m2.UpperRight.X, Y: max(m2.UpperRight.Y, pin.YHigh+endExt)},
 		NetID:      m2.NetID,
 	}
 }

@@ -19,7 +19,7 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
-	return session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{})
+	return session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{}, 0)
 }
 
 // trackIDFromResult extracts the M3 track ID from the middle segment of a NetResult.
