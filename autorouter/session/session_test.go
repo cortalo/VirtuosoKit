@@ -90,7 +90,7 @@ func m3FromResult(res NetResult) Segment {
 // --- tests ---
 
 func TestRoute_EmptyNets_ReturnsEmptyResults(t *testing.T) {
-	s := &Session{canvas: &mockCanvas{}, router: &mockRouter{}, nets: nil}
+	s := &Session{canvas: &mockCanvas{}, router: &mockRouter{}, nets: nil, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 	results := s.Route()
 	assert.Empty(t, results)
 }
@@ -102,7 +102,7 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 
 	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}}
+	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	results := s.Route()
 
@@ -125,7 +125,7 @@ func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
 
 	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}}
+	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	s.Route()
 
@@ -141,7 +141,7 @@ func TestRoute_SingleNet_RouteError_SkipsOccupy(t *testing.T) {
 	routeErr := errors.New("no path")
 	router := &mockRouter{results: []routeResult{{err: routeErr}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 0, 100, 100)}}
+	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 0, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	results := s.Route()
 
@@ -161,6 +161,8 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 		canvas: canvas,
 		router: router,
 		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
+		m2DRC:  common.NoDRC{},
+		m3DRC:  common.NoDRC{},
 	}
 
 	results := s.Route()
@@ -193,6 +195,8 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 		canvas: canvas,
 		router: router,
 		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
+		m2DRC:  common.NoDRC{},
+		m3DRC:  common.NoDRC{},
 	}
 
 	results := s.Route()
@@ -220,6 +224,8 @@ func TestRoute_ResultsPreserveOrder(t *testing.T) {
 		canvas: canvas,
 		router: router,
 		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
+		m2DRC:  common.NoDRC{},
+		m3DRC:  common.NoDRC{},
 	}
 
 	results := s.Route()

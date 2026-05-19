@@ -147,7 +147,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "via23: %+v\n", via23)
 	}
 
-	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets, via12, via23, m2DRC.EndExtension())
+	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets, via12, via23, m2DRC, m3DRC)
 	routes := s.Route()
 
 	if *verbose {

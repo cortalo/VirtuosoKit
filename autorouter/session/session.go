@@ -12,6 +12,8 @@ type Segment = common.Segment
 type TrackSegment = common.TrackSegment
 type RoutingPin = common.RoutingPin
 type Net = common.Net
+type ViaConfig = common.ViaConfig
+type DRCSpec = common.DRCSpec
 
 type Canvas interface {
 	OccupyM2(seg Segment) error
@@ -24,19 +26,26 @@ type Router interface {
 	Route(pins []RoutingPin, netID int) ([]Segment, TrackSegment, error)
 }
 
-type ViaConfig = common.ViaConfig
-
 type Session struct {
-	canvas   Canvas
-	router   Router
-	nets     []*Net
-	via12    ViaConfig
-	via23    ViaConfig
-	m2EndExt int
+	canvas Canvas
+	router Router
+	nets   []*Net
+	via12  ViaConfig
+	via23  ViaConfig
+	m2DRC  DRCSpec
+	m3DRC  DRCSpec
 }
 
-func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig, m2EndExt int) *Session {
-	return &Session{canvas: canvas, router: router, nets: nets, via12: via12, via23: via23, m2EndExt: m2EndExt}
+func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig, m2DRC, m3DRC DRCSpec) *Session {
+	return &Session{
+		canvas: canvas,
+		router: router,
+		nets:   nets,
+		via12:  via12,
+		via23:  via23,
+		m2DRC:  m2DRC,
+		m3DRC:  m3DRC,
+	}
 }
 
 type NetResult struct {
@@ -60,6 +69,9 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.nets))
+	m2EndExt := s.m2DRC.EndExtension()
+	via23EndExt := max(s.m2DRC.EndExtension(), s.m3DRC.EndExtension())
+
 	for i, net := range s.nets {
 		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
 		if err != nil {
@@ -68,7 +80,7 @@ func (s *Session) Route() []NetResult {
 		}
 
 		for j, pin := range net.Pins {
-			m2Segs[j] = extendM2ToCoverPin(m2Segs[j], pin, s.m2EndExt)
+			m2Segs[j] = extendM2ToCoverPin(m2Segs[j], pin, m2EndExt)
 			m2Segs[j].Layer = common.M2
 		}
 
@@ -85,8 +97,8 @@ func (s *Session) Route() []NetResult {
 		segs = append(segs, m2Segs...)
 		segs = append(segs, m3Seg)
 		for j, pin := range net.Pins {
-			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12)
-			segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23)
+			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12, m2EndExt)
+			segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23EndExt)
 		}
 
 		results[i] = NetResult{NetID: net.ID, Segments: segs}
@@ -99,14 +111,16 @@ func (s *Session) Route() []NetResult {
 	return results
 }
 
-func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Layer) []Segment {
+// appendViaCuts places via cuts in a grid within the overlap of segments a and b,
+// inset by endExt on all sides to satisfy end-extension DRC constraints.
+func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Layer, endExt int) []Segment {
 	if vc.CutW == 0 || vc.CutH == 0 {
 		return segs
 	}
-	x0 := max(a.LowerLeft.X, b.LowerLeft.X)
-	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y)
-	x1 := min(a.UpperRight.X, b.UpperRight.X)
-	y1 := min(a.UpperRight.Y, b.UpperRight.Y)
+	x0 := max(a.LowerLeft.X, b.LowerLeft.X) + endExt
+	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y) + endExt
+	x1 := min(a.UpperRight.X, b.UpperRight.X) - endExt
+	y1 := min(a.UpperRight.Y, b.UpperRight.Y) - endExt
 	if x0 >= x1 || y0 >= y1 {
 		return segs
 	}
@@ -130,8 +144,6 @@ func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Laye
 	return segs
 }
 
-// pinBBox converts a RoutingPin to its bounding-box Segment.
-// When XHigh <= XLow the bbox is degenerate and appendVia will discard it.
 func pinBBox(pin RoutingPin) Segment {
 	return Segment{
 		LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
