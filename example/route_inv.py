@@ -7,6 +7,7 @@ Then run:
     python example/route_inv.py
 """
 
+import argparse
 import json
 import subprocess
 import sys
@@ -26,12 +27,12 @@ LIB = "test"
 CELL = "pfd_mini_delay_1"
 
 M3_TRACK_WIDTH_NM = 400
-M2_WIDTH_NM = 230
-M3_TRACK_WIDTH_UM = M3_TRACK_WIDTH_NM / 1000.0
+M2_WIDTH_NM = 280
 M2_LAYER = ("METAL2", "drawing")
 M3_LAYER = ("METAL3", "drawing")
 IGNORE_NETS = ["VDD", "VSS"]
 IGNORE_LIBS = ["basic"]
+PROCESS_LIB = "tsmc18"
 
 
 def nm_to_um(v: int) -> float:
@@ -67,46 +68,38 @@ def read_layout(client: VirtuosoClient) -> tuple[list[dict], list[dict]]:
     return shapes, instances
 
 
-def draw_routes(client: VirtuosoClient, routes: list[dict], ll_y_um: float) -> None:
+LAYER_MAP = {
+    "M2":    M2_LAYER,
+    "M3":    M3_LAYER,
+    "Via12": ("VIA12", "drawing"),
+    "Via23": ("VIA23", "drawing"),
+}
+
+
+def draw_routes(client: VirtuosoClient, routes: list[dict]) -> None:
     _skill(client, f'cv = dbOpenCellViewByType("{LIB}" "{CELL}" "layout" "maskLayout" "a")')
 
     for route in routes:
         if route.get("error"):
             continue
 
-        m2f = route["m2_from"]
-        m2t = route["m2_to"]
-        m3  = route["m3"]
-
-        _skill(client, layout_create_rect(
-            *M2_LAYER,
-            nm_to_um(m2f["lower_left"]["x"]),
-            nm_to_um(m2f["lower_left"]["y"]),
-            nm_to_um(m2f["upper_right"]["x"]),
-            nm_to_um(m2f["upper_right"]["y"]),
-        ))
-        _skill(client, layout_create_rect(
-            *M2_LAYER,
-            nm_to_um(m2t["lower_left"]["x"]),
-            nm_to_um(m2t["lower_left"]["y"]),
-            nm_to_um(m2t["upper_right"]["x"]),
-            nm_to_um(m2t["upper_right"]["y"]),
-        ))
-
-        track_y_lo = ll_y_um + m3["track_id"] * M3_TRACK_WIDTH_UM
-        track_y_hi = track_y_lo + M3_TRACK_WIDTH_UM
-        _skill(client, layout_create_rect(
-            *M3_LAYER,
-            nm_to_um(m3["start"]),
-            track_y_lo,
-            nm_to_um(m3["end"]),
-            track_y_hi,
-        ))
+        for seg in route.get("segments", []):
+            ll, ur = seg["lower_left"], seg["upper_right"]
+            layer = LAYER_MAP[seg["layer"]]
+            _skill(client, layout_create_rect(
+                *layer,
+                nm_to_um(ll["x"]), nm_to_um(ll["y"]),
+                nm_to_um(ur["x"]), nm_to_um(ur["y"]),
+            ))
 
     _skill(client, save_current_cellview())
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-verbose", action="store_true", help="print routing progress to stderr")
+    args = parser.parse_args()
+
     if not BINARY.exists():
         print(
             f"ERROR: binary not found at {BINARY}\n"
@@ -119,12 +112,6 @@ def main() -> int:
     client = VirtuosoClient.local(port=65432)
 
     shapes, instances = read_layout(client)
-
-    pr = next((s for s in shapes if s.get("layer") == "prBoundary"), None)
-    if pr is None:
-        print("ERROR: prBoundary shape not found in layout", file=sys.stderr)
-        return 1
-    ll_y_um = pr["bbox"][0][1]
 
     schem = read_schematic(client, LIB, CELL)
     nets = {name: net["connections"] for name, net in schem["nets"].items()}
@@ -144,10 +131,19 @@ def main() -> int:
         f"-m2-width={M2_WIDTH_NM}",
         *[f"-ignore-net={n}" for n in IGNORE_NETS],
         *[f"-ignore-lib={l}" for l in IGNORE_LIBS],
+        f"-process-lib={PROCESS_LIB}",
+        *(["-verbose"] if args.verbose else []),
     ]
-    proc = subprocess.run(cmd, input=json.dumps(payload), capture_output=True, text=True)
+    proc = subprocess.run(
+        cmd,
+        input=json.dumps(payload),
+        stdout=subprocess.PIPE,
+        stderr=None if args.verbose else subprocess.PIPE,
+        text=True,
+    )
     if proc.returncode != 0:
-        print(proc.stderr, file=sys.stderr)
+        if not args.verbose:
+            print(proc.stderr, file=sys.stderr)
         return proc.returncode
 
     routes = json.loads(proc.stdout)["routes"]
@@ -159,7 +155,7 @@ def main() -> int:
     for r in err:
         print(f"  net {r['net_id']} FAILED: {r['error']}", file=sys.stderr)
 
-    draw_routes(client, routes, ll_y_um)
+    draw_routes(client, routes)
     print(f"Drew {len(ok) * 3} shapes into {LIB}/{CELL}")
     return 0
 

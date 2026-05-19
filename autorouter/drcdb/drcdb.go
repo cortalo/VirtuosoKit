@@ -1,6 +1,7 @@
 package drcdb
 
 import (
+	"autorouter/common"
 	"errors"
 	"fmt"
 
@@ -12,8 +13,19 @@ var (
 	ErrLayerNotFound = errors.New("layer not found")
 )
 
-type layerRules struct {
+// rawEntry holds all possible fields for both metal layer and via entries.
+// TOML leaves unset fields at their zero values.
+type rawEntry struct {
+	// metal layer fields
 	MinArea int `toml:"min_area"`
+	// via fields
+	ViaDef string `toml:"via_def"`
+	CutW   int    `toml:"cut_w"`
+	CutH   int    `toml:"cut_h"`
+	SpaceX int    `toml:"space_x"`
+	SpaceY int    `toml:"space_y"`
+	Enc1   [2]int `toml:"enc1"`
+	Enc2   [2]int `toml:"enc2"`
 }
 
 // DRCSpec holds the manufacturing rules for a single metal layer.
@@ -24,11 +36,11 @@ type DRCSpec struct {
 func (s DRCSpec) MinArea() int { return s.minArea }
 
 type DB struct {
-	libs map[string]map[string]layerRules
+	libs map[string]map[string]rawEntry
 }
 
 func Load(path string) (*DB, error) {
-	var raw map[string]map[string]layerRules
+	var raw map[string]map[string]rawEntry
 	if _, err := toml.DecodeFile(path, &raw); err != nil {
 		return nil, fmt.Errorf("drcdb: %w", err)
 	}
@@ -40,9 +52,29 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
 	}
-	rules, ok := layers[layer]
+	e, ok := layers[layer]
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: rules.MinArea}, nil
+	return DRCSpec{minArea: e.MinArea}, nil
+}
+
+func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {
+	layers, ok := db.libs[lib]
+	if !ok {
+		return common.ViaConfig{}, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+	}
+	e, ok := layers[viaName]
+	if !ok {
+		return common.ViaConfig{}, fmt.Errorf("%w: %s", ErrLayerNotFound, viaName)
+	}
+	return common.ViaConfig{
+		ViaDef: e.ViaDef,
+		CutW:   e.CutW,
+		CutH:   e.CutH,
+		SpaceX: e.SpaceX,
+		SpaceY: e.SpaceY,
+		Enc1:   e.Enc1,
+		Enc2:   e.Enc2,
+	}, nil
 }

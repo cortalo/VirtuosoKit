@@ -44,7 +44,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
-	s := session.NewSession(c, r, nets)
+	s := session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{})
 
 	results := s.Route()
 

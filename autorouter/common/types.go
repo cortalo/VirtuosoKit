@@ -15,8 +15,8 @@ type Layer int
 const (
 	M2 Layer = iota + 1
 	M3
-	Via12 // M1-M2 contact
-	Via23 // M2-M3 via
+	Via12
+	Via23
 )
 
 func (l Layer) MarshalJSON() ([]byte, error) {
@@ -53,6 +53,19 @@ func (l *Layer) UnmarshalJSON(b []byte) error {
 	}
 	return nil
 }
+
+// ViaConfig holds DRC parameters for a single via type.
+// All dimensions are in nm.
+type ViaConfig struct {
+	ViaDef string // via definition name passed to the layout tool (e.g. "M3_M2")
+	CutW   int    // cut width
+	CutH   int    // cut height
+	SpaceX int    // cut-to-cut spacing in X
+	SpaceY int    // cut-to-cut spacing in Y
+	Enc1   [2]int // enclosure on layer1 [x, y]
+	Enc2   [2]int // enclosure on layer2 [x, y]
+}
+
 
 type Segment struct {
 	LowerLeft  Point `json:"lower_left"`

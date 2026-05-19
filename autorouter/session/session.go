@@ -24,14 +24,18 @@ type Router interface {
 	Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error)
 }
 
+type ViaConfig = common.ViaConfig
+
 type Session struct {
 	canvas Canvas
 	router Router
 	nets   []*Net
+	via12  ViaConfig
+	via23  ViaConfig
 }
 
-func NewSession(canvas Canvas, router Router, nets []*Net) *Session {
-	return &Session{canvas: canvas, router: router, nets: nets}
+func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig) *Session {
+	return &Session{canvas: canvas, router: router, nets: nets, via12: via12, via23: via23}
 }
 
 type NetResult struct {
@@ -81,10 +85,10 @@ func (s *Session) Route() []NetResult {
 		}
 
 		segs := []Segment{m2From, m3Seg, m2To}
-		segs = appendVia(segs, pinBBox(net.From), m2From, common.Via12, net.ID)
-		segs = appendVia(segs, m2From, m3Seg, common.Via23, net.ID)
-		segs = appendVia(segs, m2To, m3Seg, common.Via23, net.ID)
-		segs = appendVia(segs, pinBBox(net.To), m2To, common.Via12, net.ID)
+		segs = appendViaCuts(segs, s.via12, pinBBox(net.From), m2From, common.Via12)
+		segs = appendViaCuts(segs, s.via23, m2From, m3Seg, common.Via23)
+		segs = appendViaCuts(segs, s.via23, m2To, m3Seg, common.Via23)
+		segs = appendViaCuts(segs, s.via12, pinBBox(net.To), m2To, common.Via12)
 
 		results[i] = NetResult{NetID: net.ID, Segments: segs}
 
@@ -95,8 +99,10 @@ func (s *Session) Route() []NetResult {
 	return results
 }
 
-// appendVia computes the intersection of a and b; if non-degenerate, appends it to segs.
-func appendVia(segs []Segment, a, b Segment, layer common.Layer, netID int) []Segment {
+func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Layer) []Segment {
+	if vc.CutW == 0 || vc.CutH == 0 {
+		return segs
+	}
 	x0 := max(a.LowerLeft.X, b.LowerLeft.X)
 	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y)
 	x1 := min(a.UpperRight.X, b.UpperRight.X)
@@ -104,12 +110,24 @@ func appendVia(segs []Segment, a, b Segment, layer common.Layer, netID int) []Se
 	if x0 >= x1 || y0 >= y1 {
 		return segs
 	}
-	return append(segs, Segment{
-		LowerLeft:  Point{X: x0, Y: y0},
-		UpperRight: Point{X: x1, Y: y1},
-		NetID:      netID,
-		Layer:      layer,
-	})
+	w, h := x1-x0, y1-y0
+	cols := max(1, (w+vc.SpaceX)/(vc.CutW+vc.SpaceX))
+	rows := max(1, (h+vc.SpaceY)/(vc.CutH+vc.SpaceY))
+	startX := (x0+x1)/2 - (cols*vc.CutW+(cols-1)*vc.SpaceX)/2
+	startY := (y0+y1)/2 - (rows*vc.CutH+(rows-1)*vc.SpaceY)/2
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			llx := startX + c*(vc.CutW+vc.SpaceX)
+			lly := startY + r*(vc.CutH+vc.SpaceY)
+			segs = append(segs, Segment{
+				LowerLeft:  Point{X: llx, Y: lly},
+				UpperRight: Point{X: llx + vc.CutW, Y: lly + vc.CutH},
+				Layer:      layer,
+				NetID:      a.NetID,
+			})
+		}
+	}
+	return segs
 }
 
 // pinBBox converts a RoutingPin to its bounding-box Segment.

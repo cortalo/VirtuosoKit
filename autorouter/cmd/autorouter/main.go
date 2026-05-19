@@ -61,6 +61,19 @@ func loadDRCSpec(db *drcdb.DB, lib, layer string) common.DRCSpec {
 	return spec
 }
 
+// loadViaConfig queries a via config from the DB, returning a zero ViaConfig on any error.
+func loadViaConfig(db *drcdb.DB, lib, viaName string) common.ViaConfig {
+	if db == nil || lib == "" {
+		return common.ViaConfig{}
+	}
+	vc, err := db.QueryVia(lib, viaName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: via config not found for %s.%s: %v, via placement disabled\n", lib, viaName, err)
+		return common.ViaConfig{}
+	}
+	return vc
+}
+
 // ignoreNetFlag accumulates repeated -ignore-net flags into a slice.
 type ignoreNetFlag []string
 
@@ -71,6 +84,7 @@ func (f *ignoreNetFlag) Set(v string) error {
 }
 
 func main() {
+	verbose := flag.Bool("verbose", false, "print routing progress to stderr")
 	m3TrackWidth := flag.Int("m3-track-width", 100, "M3 track width in nm")
 	m2Width := flag.Int("m2-width", 100, "M2 via width in nm")
 	var ignoreNets ignoreNetFlag
@@ -124,8 +138,35 @@ func main() {
 	}
 	m2DRC := loadDRCSpec(drcDB, *processLib, "M2")
 	m3DRC := loadDRCSpec(drcDB, *processLib, "M3")
-	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets)
-	resp := response{Routes: s.Route()}
+	via12 := loadViaConfig(drcDB, *processLib, "Via12")
+	via23 := loadViaConfig(drcDB, *processLib, "Via23")
+	if *verbose {
+		fmt.Fprintf(os.Stderr, "canvas: ll=%v ur=%v tracks=%d\n", ll, ur, trackCount)
+		fmt.Fprintf(os.Stderr, "nets: %d to route\n", len(nets))
+		fmt.Fprintf(os.Stderr, "via12: %+v\n", via12)
+		fmt.Fprintf(os.Stderr, "via23: %+v\n", via23)
+	}
+
+	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets, via12, via23)
+	routes := s.Route()
+
+	if *verbose {
+		ok := 0
+		for _, r := range routes {
+			if r.Err != nil {
+				fmt.Fprintf(os.Stderr, "  net %d FAILED: %v\n", r.NetID, r.Err)
+				continue
+			}
+			ok++
+			fmt.Fprintf(os.Stderr, "  net %d:\n", r.NetID)
+			for _, seg := range r.Segments {
+				fmt.Fprintf(os.Stderr, "    seg  layer=%v ll=%v ur=%v\n", seg.Layer, seg.LowerLeft, seg.UpperRight)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "routed %d/%d nets\n", ok, len(routes))
+	}
+
+	resp := response{Routes: routes}
 
 	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {
 		fmt.Fprintf(os.Stderr, "error: encode response: %v\n", err)
