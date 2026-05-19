@@ -84,7 +84,31 @@ RBStop()
 ```bash
 source langgraph-env/bin/activate
 python hello_virtuoso.py
-python example/router.py
 python example/agent_place_demo.py
 python example/agent_place_demo.py --debug
 ```
+
+## Autorouter
+
+A two-layer M2/M3 autorouter (Go) that reads layout and schematic data from
+Virtuoso, routes nets, and draws the result back into the layout.
+
+Build the binary first:
+
+```bash
+cd autorouter
+go build -o bin/autorouter ./cmd/autorouter/
+```
+
+Then route a cell:
+
+```bash
+python route.py <lib> <cell> \
+    --process-lib tsmc18 \
+    --ignore-net VDD --ignore-net VSS \
+    --ignore-lib basic \
+    --verbose
+```
+
+See [`autorouter/README.md`](autorouter/README.md) for full configuration,
+DRC setup (`drcs.toml`, `pins.toml`), the JSON API, and architecture details.

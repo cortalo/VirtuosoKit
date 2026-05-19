@@ -11,7 +11,7 @@ from virtuoso_bridge.virtuoso.layout import parse_layout_geometry_output
 from virtuoso_bridge.virtuoso.layout.ops import layout_read_geometry
 
 LIB = "test"
-CELL = "inv"
+CELL = "inv_2"
 VIEW = "layout"
 OUT = Path(__file__).parent / "inv_layout.json"
 

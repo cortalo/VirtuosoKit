@@ -71,15 +71,23 @@ func parseOrient(s string) string {
 }
 
 // transformPin applies an orientation transform to a pin bbox relative to the cell origin.
-// Supported orientations: R0 (identity), MX (mirror Y), MY (mirror X), R180 (rotate 180°).
+// Covers all eight Cadence orientations.
 func transformPin(xLow, xHigh, yLow, yHigh int, orient string) (int, int, int, int) {
 	switch orient {
-	case "MX":
-		return xLow, xHigh, -yHigh, -yLow
-	case "MY":
-		return -xHigh, -xLow, yLow, yHigh
-	case "R180":
+	case "R90": // 90° CCW: (x,y) → (-y, x)
+		return -yHigh, -yLow, xLow, xHigh
+	case "R180": // 180°: (x,y) → (-x,-y)
 		return -xHigh, -xLow, -yHigh, -yLow
+	case "R270": // 270° CCW: (x,y) → (y,-x)
+		return yLow, yHigh, -xHigh, -xLow
+	case "MX": // mirror X axis: (x,y) → (x,-y)
+		return xLow, xHigh, -yHigh, -yLow
+	case "MY": // mirror Y axis: (x,y) → (-x,y)
+		return -xHigh, -xLow, yLow, yHigh
+	case "MXR90": // MX then R90: (x,y) → (y,x)
+		return yLow, yHigh, xLow, xHigh
+	case "MYR90": // MY then R90: (x,y) → (-y,-x)
+		return -yHigh, -yLow, -xHigh, -xLow
 	default: // R0 and anything unrecognised
 		return xLow, xHigh, yLow, yHigh
 	}
