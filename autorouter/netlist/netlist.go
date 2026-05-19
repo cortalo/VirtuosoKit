@@ -58,16 +58,21 @@ func prBoundary(shapes []LayoutShape) (lowerLeft, upperRight common.Point, err e
 // BuildNetsFromData builds nets from already-parsed layout and schematic data.
 // It also returns the lower-left and upper-right corners of the prBoundary shape,
 // converted to nm. For multi-pin nets, consecutive pin pairs are chained and share
-// the same net ID. Nets whose names appear in ignoreNets are skipped.
-func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+// the same net ID. Nets in ignoreNets and pins whose instance belongs to a lib in
+// ignoreLibs are skipped; a net with fewer than 2 remaining pins is dropped.
+func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets, ignoreLibs []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
 	if err != nil {
 		return
 	}
 
-	ignored := make(map[string]struct{}, len(ignoreNets))
+	ignoredNets := make(map[string]struct{}, len(ignoreNets))
 	for _, n := range ignoreNets {
-		ignored[n] = struct{}{}
+		ignoredNets[n] = struct{}{}
+	}
+	ignoredLibs := make(map[string]struct{}, len(ignoreLibs))
+	for _, l := range ignoreLibs {
+		ignoredLibs[l] = struct{}{}
 	}
 
 	instByName := make(map[string]LayoutInstance, len(layout.Instances))
@@ -82,16 +87,13 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets 
 	sort.Strings(netNames)
 
 	for netID, name := range netNames {
-		if _, skip := ignored[name]; skip {
+		if _, skip := ignoredNets[name]; skip {
 			continue
 		}
 		instPins := schematic.Nets[name]
-		if len(instPins) < 2 {
-			continue
-		}
 
-		pins := make([]common.RoutingPin, len(instPins))
-		for i, instPin := range instPins {
+		var pins []common.RoutingPin
+		for _, instPin := range instPins {
 			parts := strings.SplitN(instPin, ".", 2)
 			if len(parts) != 2 {
 				err = fmt.Errorf("netlist: invalid inst.pin %q in net %q", instPin, name)
@@ -102,6 +104,9 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets 
 				err = fmt.Errorf("netlist: instance %q not found in layout", parts[0])
 				return
 			}
+			if _, skip := ignoredLibs[inst.Lib]; skip {
+				continue
+			}
 			xLow, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
 				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
@@ -109,11 +114,14 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets 
 			}
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))
-			pins[i] = common.RoutingPin{
+			pins = append(pins, common.RoutingPin{
 				XLow:  instX + xLow,
 				YLow:  instY + yLow,
 				YHigh: instY + yHigh,
-			}
+			})
+		}
+		if len(pins) < 2 {
+			continue
 		}
 
 		for i := 0; i < len(pins)-1; i++ {
@@ -129,7 +137,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets 
 }
 
 // BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
-func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLibs []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	var layout Layout
 	if err = parseJSON(layoutPath, &layout); err != nil {
 		return
@@ -138,7 +146,7 @@ func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets []string) 
 	if err = parseJSON(schematicPath, &schematic); err != nil {
 		return
 	}
-	return BuildNetsFromData(layout, schematic, db, ignoreNets)
+	return BuildNetsFromData(layout, schematic, db, ignoreNets, ignoreLibs)
 }
 
 func parseJSON(path string, v any) error {

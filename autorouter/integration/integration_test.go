@@ -30,7 +30,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 		"testdata/inv_layout.json",
 		"testdata/inv_schematic.json",
 		db,
-		nil,
+		nil, nil,
 	)
 	require.NoError(t, err)
 	require.Len(t, nets, 1)

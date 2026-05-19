@@ -51,6 +51,8 @@ func main() {
 	m2Width := flag.Int("m2-width", 100, "M2 via width in nm")
 	var ignoreNets ignoreNetFlag
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
+	var ignoreLibs ignoreNetFlag
+	flag.Var(&ignoreLibs, "ignore-lib", "lib name whose instances are excluded from routing (repeatable, e.g. -ignore-lib analogLib)")
 	flag.Parse()
 
 	pinPath, err := pinsPath()
@@ -70,7 +72,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets)
+	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)
