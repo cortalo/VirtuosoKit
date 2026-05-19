@@ -6,7 +6,7 @@ from virtuoso_bridge.virtuoso.schematic.reader import read_schematic
 
 client = VirtuosoClient.local(port=65432)
 
-data = read_schematic(client, "test", "inv")
+data = read_schematic(client, "test", "inv_2")
 
 minimal = {
     "instances": [
@@ -19,6 +19,6 @@ minimal = {
     },
 }
 
-with open("inv_schematic.json", "w") as f:
+with open("inv_2_schematic.json", "w") as f:
     json.dump(minimal, f, indent=2)
 print(f"Saved {len(minimal['instances'])} instances, {len(minimal['nets'])} nets to inv_schematic.json")

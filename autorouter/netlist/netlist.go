@@ -35,7 +35,13 @@ type LayoutInstance struct {
 
 // Schematic mirrors the schematic JSON structure.
 type Schematic struct {
-	Nets map[string][]string `json:"nets"` // net name → ["inst.pin", ...]
+	Instances []SchematicInstance `json:"instances"`
+	Nets      map[string][]string `json:"nets"` // net name → ["inst.pin", ...]
+}
+
+type SchematicInstance struct {
+	Name string `json:"name"`
+	Lib  string `json:"lib"`
 }
 
 var ErrNoPRBoundary = errors.New("netlist: prBoundary shape not found in layout")
@@ -75,6 +81,11 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		ignoredLibs[l] = struct{}{}
 	}
 
+	schemLib := make(map[string]string, len(schematic.Instances))
+	for _, inst := range schematic.Instances {
+		schemLib[inst.Name] = inst.Lib
+	}
+
 	instByName := make(map[string]LayoutInstance, len(layout.Instances))
 	for _, inst := range layout.Instances {
 		instByName[inst.Name] = inst
@@ -98,6 +109,11 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			if len(parts) != 2 {
 				err = fmt.Errorf("netlist: invalid inst.pin %q in net %q", instPin, name)
 				return
+			}
+			if lib, found := schemLib[parts[0]]; found {
+				if _, skip := ignoredLibs[lib]; skip {
+					continue
+				}
 			}
 			inst, ok := instByName[parts[0]]
 			if !ok {
