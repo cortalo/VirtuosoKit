@@ -95,8 +95,7 @@ type RoutingPin struct {
 
 type Net struct {
 	ID   int
-	From RoutingPin
-	To   RoutingPin
+	Pins []RoutingPin
 }
 
 type DRCSpec interface {

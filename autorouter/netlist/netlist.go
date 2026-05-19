@@ -140,14 +140,10 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		if len(pins) < 2 {
 			continue
 		}
-
-		for i := 0; i < len(pins)-1; i++ {
-			nets = append(nets, &common.Net{
-				ID:   netID + 1,
-				From: pins[i],
-				To:   pins[i+1],
-			})
-		}
+		nets = append(nets, &common.Net{
+			ID:   netID + 1,
+			Pins: pins,
+		})
 	}
 
 	return

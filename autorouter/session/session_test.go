@@ -12,8 +12,7 @@ import (
 // --- mocks ---
 
 type routeResult struct {
-	m2From Segment
-	m2To   Segment
+	m2Segs []Segment
 	m3     TrackSegment
 	err    error
 }
@@ -23,10 +22,10 @@ type mockRouter struct {
 	calls   int
 }
 
-func (m *mockRouter) Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error) {
+func (m *mockRouter) Route(pins []RoutingPin, netID int) ([]Segment, TrackSegment, error) {
 	r := m.results[m.calls]
 	m.calls++
-	return r.m2From, r.m2To, r.m3, r.err
+	return r.m2Segs, r.m3, r.err
 }
 
 type mockCanvas struct {
@@ -51,9 +50,11 @@ func (m *mockCanvas) GetM3TrackWidth() int { return 100 }
 
 func makeNet(id, fx, fy, tx, ty int) *Net {
 	return &Net{
-		ID:   id,
-		From: RoutingPin{XLow: fx, YLow: fy, YHigh: fy},
-		To:   RoutingPin{XLow: tx, YLow: ty, YHigh: ty},
+		ID: id,
+		Pins: []RoutingPin{
+			{XLow: fx, YLow: fy, YHigh: fy},
+			{XLow: tx, YLow: ty, YHigh: ty},
+		},
 	}
 }
 
@@ -76,6 +77,16 @@ func expectedM3Seg(ts TrackSegment) Segment {
 	}
 }
 
+// m3FromResult finds the M3 segment in a NetResult by layer.
+func m3FromResult(res NetResult) Segment {
+	for _, s := range res.Segments {
+		if s.Layer == common.M3 {
+			return s
+		}
+	}
+	panic("no M3 segment")
+}
+
 // --- tests ---
 
 func TestRoute_EmptyNets_ReturnsEmptyResults(t *testing.T) {
@@ -89,7 +100,7 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 	m2To := seg(90, 100, 100, 200, 1)
 	m3 := track(5, 0, 100, 1)
 
-	router := &mockRouter{results: []routeResult{{m2From, m2To, m3, nil}}}
+	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
 	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}}
 
@@ -97,15 +108,14 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.NoError(t, results[0].Err)
-	require.Len(t, results[0].Segments, 3)
 
 	wantM2From := m2From
 	wantM2From.Layer = common.M2
 	wantM2To := m2To
 	wantM2To.Layer = common.M2
 	assert.Equal(t, wantM2From, results[0].Segments[0])
-	assert.Equal(t, expectedM3Seg(m3), results[0].Segments[1])
-	assert.Equal(t, wantM2To, results[0].Segments[2])
+	assert.Equal(t, wantM2To, results[0].Segments[1])
+	assert.Equal(t, expectedM3Seg(m3), m3FromResult(results[0]))
 }
 
 func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
@@ -113,7 +123,7 @@ func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
 	m2To := seg(90, 100, 100, 200, 1)
 	m3 := track(5, 0, 100, 1)
 
-	router := &mockRouter{results: []routeResult{{m2From, m2To, m3, nil}}}
+	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
 	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}}
 
@@ -142,8 +152,8 @@ func TestRoute_SingleNet_RouteError_SkipsOccupy(t *testing.T) {
 }
 
 func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
-	r1 := routeResult{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1), track(3, 0, 100, 1), nil}
-	r2 := routeResult{seg(0, 0, 10, 200, 2), seg(90, 0, 100, 200, 2), track(7, 0, 100, 2), nil}
+	r1 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1)}, m3: track(3, 0, 100, 1)}
+	r2 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 200, 2), seg(90, 0, 100, 200, 2)}, m3: track(7, 0, 100, 2)}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
@@ -159,21 +169,22 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
 
-	wantM2s := func(r routeResult) (Segment, Segment) {
-		f, to := r.m2From, r.m2To
-		f.Layer = common.M2
-		to.Layer = common.M2
-		return f, to
+	withM2Layer := func(segs []Segment) []Segment {
+		out := make([]Segment, len(segs))
+		for i, s := range segs {
+			s.Layer = common.M2
+			out[i] = s
+		}
+		return out
 	}
-	f1, to1 := wantM2s(r1)
-	f2, to2 := wantM2s(r2)
-	assert.Equal(t, []Segment{f1, to1, f2, to2}, canvas.m2Calls)
+	wantM2Calls := append(withM2Layer(r1.m2Segs), withM2Layer(r2.m2Segs)...)
+	assert.Equal(t, wantM2Calls, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{r1.m3, r2.m3}, canvas.m3Calls)
 }
 
 func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	routeErr := errors.New("no path")
-	r1 := routeResult{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1), track(3, 0, 100, 1), nil}
+	r1 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1)}, m3: track(3, 0, 100, 1)}
 	r2 := routeResult{err: routeErr}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
@@ -190,9 +201,9 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 	assert.ErrorIs(t, results[1].Err, routeErr)
 
-	wantFrom := r1.m2From
+	wantFrom := r1.m2Segs[0]
 	wantFrom.Layer = common.M2
-	wantTo := r1.m2To
+	wantTo := r1.m2Segs[1]
 	wantTo.Layer = common.M2
 	assert.Equal(t, []Segment{wantFrom, wantTo}, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{r1.m3}, canvas.m3Calls)
@@ -201,7 +212,7 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	routeErr := errors.New("no path")
 	r1 := routeResult{err: routeErr}
-	r2 := routeResult{seg(0, 0, 10, 100, 2), seg(90, 0, 100, 100, 2), track(4, 0, 100, 2), nil}
+	r2 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 2), seg(90, 0, 100, 100, 2)}, m3: track(4, 0, 100, 2)}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
@@ -216,10 +227,9 @@ func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.ErrorIs(t, results[0].Err, routeErr)
 	assert.NoError(t, results[1].Err)
-	require.Len(t, results[1].Segments, 3)
 
-	wantFrom := r2.m2From
+	wantFrom := r2.m2Segs[0]
 	wantFrom.Layer = common.M2
 	assert.Equal(t, wantFrom, results[1].Segments[0])
-	assert.Equal(t, expectedM3Seg(r2.m3), results[1].Segments[1])
+	assert.Equal(t, expectedM3Seg(r2.m3), m3FromResult(results[1]))
 }

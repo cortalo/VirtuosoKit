@@ -22,16 +22,22 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 	return session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{}, 0)
 }
 
-// trackIDFromResult extracts the M3 track ID from the middle segment of a NetResult.
-// The session always returns segments in order [m2From, m3, m2To].
-// trackWidth is the canvas M3 track width (100 in integration tests).
+// trackIDFromResult finds the M3 segment by layer and returns its track ID.
 func trackIDFromResult(res session.NetResult, trackWidth int) int {
-	m3Seg := res.Segments[1]
-	return m3Seg.LowerLeft.Y / trackWidth
+	for _, seg := range res.Segments {
+		if seg.Layer == common.M3 {
+			return seg.LowerLeft.Y / trackWidth
+		}
+	}
+	panic("no M3 segment in result")
+}
+
+func pin(x, y int) common.RoutingPin {
+	return common.RoutingPin{XLow: x, YLow: y, YHigh: y}
 }
 
 func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
-	nets := []*common.Net{{ID: 1, From: common.RoutingPin{XLow: 100, YLow: 100, YHigh: 100}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}}}
+	nets := []*common.Net{{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(900, 900)}}}
 	s := newIntegrationSession(nets)
 
 	results := s.Route()
@@ -43,8 +49,8 @@ func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
 
 func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 	nets := []*common.Net{
-		{ID: 1, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
-		{ID: 2, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
+		{ID: 1, Pins: []common.RoutingPin{pin(0, 500), pin(900, 500)}},
+		{ID: 2, Pins: []common.RoutingPin{pin(0, 500), pin(900, 500)}},
 	}
 	s := newIntegrationSession(nets)
 
@@ -59,7 +65,7 @@ func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 
 func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {
 	nets := []*common.Net{
-		{ID: 1, From: common.RoutingPin{XLow: -1, YLow: 0, YHigh: 0}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
+		{ID: 1, Pins: []common.RoutingPin{pin(-1, 0), pin(900, 900)}},
 	}
 	s := newIntegrationSession(nets)
 
@@ -71,8 +77,8 @@ func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {
 
 func TestIntegration_MixedNets_SuccessAndError(t *testing.T) {
 	nets := []*common.Net{
-		{ID: 1, From: common.RoutingPin{XLow: 100, YLow: 100, YHigh: 100}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
-		{ID: 2, From: common.RoutingPin{XLow: -1, YLow: 0, YHigh: 0}, To: common.RoutingPin{XLow: 900, YLow: 900, YHigh: 900}},
+		{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(900, 900)}},
+		{ID: 2, Pins: []common.RoutingPin{pin(-1, 0), pin(900, 900)}},
 	}
 	s := newIntegrationSession(nets)
 
@@ -81,4 +87,29 @@ func TestIntegration_MixedNets_SuccessAndError(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.NoError(t, results[0].Err)
 	assert.ErrorIs(t, results[1].Err, router.ErrOutOfBound)
+}
+
+func TestIntegration_ThreePinNet_RouteSucceeds(t *testing.T) {
+	nets := []*common.Net{
+		{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(500, 900), pin(900, 200)}},
+	}
+	s := newIntegrationSession(nets)
+
+	results := s.Route()
+
+	require.Len(t, results, 1)
+	assert.NoError(t, results[0].Err)
+	// 3 M2 stubs + 1 M3
+	m2Count := 0
+	m3Count := 0
+	for _, seg := range results[0].Segments {
+		switch seg.Layer {
+		case common.M2:
+			m2Count++
+		case common.M3:
+			m3Count++
+		}
+	}
+	assert.Equal(t, 3, m2Count)
+	assert.Equal(t, 1, m3Count)
 }

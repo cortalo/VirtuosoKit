@@ -21,7 +21,7 @@ type Canvas interface {
 }
 
 type Router interface {
-	Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error)
+	Route(pins []RoutingPin, netID int) ([]Segment, TrackSegment, error)
 }
 
 type ViaConfig = common.ViaConfig
@@ -61,20 +61,16 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.nets))
 	for i, net := range s.nets {
-		m2From, m2To, m3, err := s.router.Route(
-			Point{X: net.From.XLow, Y: net.From.YLow},
-			Point{X: net.To.XLow, Y: net.To.YLow},
-			net.ID,
-		)
+		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
 		if err != nil {
 			results[i] = NetResult{NetID: net.ID, Err: err}
 			continue
 		}
 
-		m2From = extendM2ToCoverPin(m2From, net.From, s.m2EndExt)
-		m2To = extendM2ToCoverPin(m2To, net.To, s.m2EndExt)
-		m2From.Layer = common.M2
-		m2To.Layer = common.M2
+		for j, pin := range net.Pins {
+			m2Segs[j] = extendM2ToCoverPin(m2Segs[j], pin, s.m2EndExt)
+			m2Segs[j].Layer = common.M2
+		}
 
 		ll := s.canvas.GetLowerLeft()
 		tw := s.canvas.GetM3TrackWidth()
@@ -85,16 +81,19 @@ func (s *Session) Route() []NetResult {
 			Layer:      common.M3,
 		}
 
-		segs := []Segment{m2From, m3Seg, m2To}
-		segs = appendViaCuts(segs, s.via12, pinBBox(net.From), m2From, common.Via12)
-		segs = appendViaCuts(segs, s.via23, m2From, m3Seg, common.Via23)
-		segs = appendViaCuts(segs, s.via23, m2To, m3Seg, common.Via23)
-		segs = appendViaCuts(segs, s.via12, pinBBox(net.To), m2To, common.Via12)
+		segs := make([]Segment, 0, len(m2Segs)+1)
+		segs = append(segs, m2Segs...)
+		segs = append(segs, m3Seg)
+		for j, pin := range net.Pins {
+			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12)
+			segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23)
+		}
 
 		results[i] = NetResult{NetID: net.ID, Segments: segs}
 
-		lo.Must0(s.canvas.OccupyM2(m2From))
-		lo.Must0(s.canvas.OccupyM2(m2To))
+		for _, m2 := range m2Segs {
+			lo.Must0(s.canvas.OccupyM2(m2))
+		}
 		lo.Must0(s.canvas.OccupyM3(m3))
 	}
 	return results
