@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // --- request ---
@@ -36,9 +37,20 @@ func pinsPath() (string, error) {
 	return filepath.Join(filepath.Dir(exe), "..", "pins.toml"), nil
 }
 
+// ignoreNetFlag accumulates repeated -ignore-net flags into a slice.
+type ignoreNetFlag []string
+
+func (f *ignoreNetFlag) String() string { return strings.Join(*f, ",") }
+func (f *ignoreNetFlag) Set(v string) error {
+	*f = append(*f, v)
+	return nil
+}
+
 func main() {
 	m3TrackWidth := flag.Int("m3-track-width", 100, "M3 track width in nm")
 	m2Width := flag.Int("m2-width", 100, "M2 via width in nm")
+	var ignoreNets ignoreNetFlag
+	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	flag.Parse()
 
 	pinPath, err := pinsPath()
@@ -58,7 +70,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db)
+	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

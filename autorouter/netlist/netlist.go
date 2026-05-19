@@ -58,11 +58,16 @@ func prBoundary(shapes []LayoutShape) (lowerLeft, upperRight common.Point, err e
 // BuildNetsFromData builds nets from already-parsed layout and schematic data.
 // It also returns the lower-left and upper-right corners of the prBoundary shape,
 // converted to nm. For multi-pin nets, consecutive pin pairs are chained and share
-// the same net ID.
-func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+// the same net ID. Nets whose names appear in ignoreNets are skipped.
+func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
 	if err != nil {
 		return
+	}
+
+	ignored := make(map[string]struct{}, len(ignoreNets))
+	for _, n := range ignoreNets {
+		ignored[n] = struct{}{}
 	}
 
 	instByName := make(map[string]LayoutInstance, len(layout.Instances))
@@ -77,6 +82,9 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB) (lowerLeft,
 	sort.Strings(netNames)
 
 	for netID, name := range netNames {
+		if _, skip := ignored[name]; skip {
+			continue
+		}
 		instPins := schematic.Nets[name]
 		if len(instPins) < 2 {
 			continue
@@ -121,7 +129,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB) (lowerLeft,
 }
 
 // BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
-func BuildNets(layoutPath, schematicPath string, db PinDB) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
+func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets []string) (lowerLeft, upperRight common.Point, nets []*common.Net, err error) {
 	var layout Layout
 	if err = parseJSON(layoutPath, &layout); err != nil {
 		return
@@ -130,7 +138,7 @@ func BuildNets(layoutPath, schematicPath string, db PinDB) (lowerLeft, upperRigh
 	if err = parseJSON(schematicPath, &schematic); err != nil {
 		return
 	}
-	return BuildNetsFromData(layout, schematic, db)
+	return BuildNetsFromData(layout, schematic, db, ignoreNets)
 }
 
 func parseJSON(path string, v any) error {
