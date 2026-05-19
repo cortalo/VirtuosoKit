@@ -37,3 +37,12 @@ type Net struct {
 	From RoutingPin
 	To   RoutingPin
 }
+
+type DRCSpec interface {
+	MinArea() int
+}
+
+// NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
+type NoDRC struct{}
+
+func (NoDRC) MinArea() int { return 0 }

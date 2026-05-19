@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"autorouter/canvas"
+	"autorouter/common"
 	"autorouter/netlist"
 	"autorouter/pindb"
 	"autorouter/router"
@@ -42,7 +43,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
 		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
 	}
-	r := router.NewTwoLayerRouter(c, 1)
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	s := session.NewSession(c, r, nets)
 
 	results := s.Route()

@@ -2,6 +2,8 @@ package main
 
 import (
 	"autorouter/canvas"
+	"autorouter/common"
+	"autorouter/drcdb"
 	"autorouter/netlist"
 	"autorouter/pindb"
 	"autorouter/router"
@@ -37,6 +39,28 @@ func pinsPath() (string, error) {
 	return filepath.Join(filepath.Dir(exe), "..", "pins.toml"), nil
 }
 
+// drcsPath returns the path to drcs.toml, next to pins.toml.
+func drcsPath() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve executable: %w", err)
+	}
+	return filepath.Join(filepath.Dir(exe), "..", "drcs.toml"), nil
+}
+
+// loadDRCSpec queries a single layer's DRC rules, falling back to NoDRC on any error.
+func loadDRCSpec(db *drcdb.DB, lib, layer string) common.DRCSpec {
+	if db == nil || lib == "" {
+		return common.NoDRC{}
+	}
+	spec, err := db.Query(lib, layer)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: drc rule not found for %s.%s: %v, using no constraint\n", lib, layer, err)
+		return common.NoDRC{}
+	}
+	return spec
+}
+
 // ignoreNetFlag accumulates repeated -ignore-net flags into a slice.
 type ignoreNetFlag []string
 
@@ -53,7 +77,20 @@ func main() {
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	var ignoreLibs ignoreNetFlag
 	flag.Var(&ignoreLibs, "ignore-lib", "lib name whose instances are excluded from routing (repeatable, e.g. -ignore-lib analogLib)")
+	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	flag.Parse()
+
+	drcsP, err := drcsPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	var drcDB *drcdb.DB
+	if db, loadErr := drcdb.Load(drcsP); loadErr == nil {
+		drcDB = db
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: could not load drcs.toml: %v, DRC rules disabled\n", loadErr)
+	}
 
 	pinPath, err := pinsPath()
 	if err != nil {
@@ -85,7 +122,9 @@ func main() {
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
 		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, *m3TrackWidth),
 	}
-	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width), nets)
+	m2DRC := loadDRCSpec(drcDB, *processLib, "M2")
+	m3DRC := loadDRCSpec(drcDB, *processLib, "M3")
+	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets)
 	resp := response{Routes: s.Route()}
 
 	if err := json.NewEncoder(os.Stdout).Encode(resp); err != nil {

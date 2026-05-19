@@ -11,4 +11,5 @@ topology_*.json
 __pycache__/
 .langgraph_api/
 autorouter/pins.toml
+autorouter/drcs.toml
 autorouter/bin

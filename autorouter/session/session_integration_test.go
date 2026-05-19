@@ -18,7 +18,7 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1000}),
 		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
 	}
-	r := router.NewTwoLayerRouter(c, 1)
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	return session.NewSession(c, r, nets)
 }
 

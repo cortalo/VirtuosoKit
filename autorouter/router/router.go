@@ -17,13 +17,17 @@ type Canvas interface {
 	GetM3TrackWidth() int
 }
 
+type DRCSpec = common.DRCSpec
+
 type TwoLayerRouter struct {
 	canvas  Canvas
 	m2Width int
+	m2DRC   DRCSpec
+	m3DRC   DRCSpec
 }
 
-func NewTwoLayerRouter(c Canvas, m2Width int) *TwoLayerRouter {
-	return &TwoLayerRouter{canvas: c, m2Width: m2Width}
+func NewTwoLayerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *TwoLayerRouter {
+	return &TwoLayerRouter{canvas: c, m2Width: m2Width, m2DRC: m2DRC, m3DRC: m3DRC}
 }
 
 func (r *TwoLayerRouter) Route(from, to Point, netID int) (Segment, Segment, TrackSegment, error) {
@@ -83,8 +87,15 @@ func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) (Segment, 
 		spacingOK = spacingOK && r.canvas.IsPassibleM3(TrackSegment{TrackID: trackID + 1, Start: m3.Start, End: m3.End, NetID: netID})
 	}
 
+	m2FromArea := (m2From.UpperRight.X - m2From.LowerLeft.X) * (m2From.UpperRight.Y - m2From.LowerLeft.Y)
+	m2ToArea := (m2To.UpperRight.X - m2To.LowerLeft.X) * (m2To.UpperRight.Y - m2To.LowerLeft.Y)
+	m3Area := (m3.End - m3.Start) * r.canvas.GetM3TrackWidth()
+
 	return m2From, m2To, m3, r.canvas.IsPassibleM2(m2From) &&
 		r.canvas.IsPassibleM2(m2To) &&
 		r.canvas.IsPassibleM3(m3) &&
-		spacingOK
+		spacingOK &&
+		m2FromArea >= r.m2DRC.MinArea() &&
+		m2ToArea >= r.m2DRC.MinArea() &&
+		m3Area >= r.m3DRC.MinArea()
 }
