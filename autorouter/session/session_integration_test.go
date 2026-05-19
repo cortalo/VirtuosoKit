@@ -35,9 +35,8 @@ func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
 
 func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 	// Both nets share the same endpoints at Y=500 (midTrack=5).
-	// Net 1 occupies track 5. Net 2's M2 at track 5 overlaps, but track 4's
-	// upper edge (500) equals net 1's lower edge (500) — strict inequality means
-	// no overlap — so net 2 is forced to track 4.
+	// Net 1 occupies track 5. Spacing rule forbids tracks 4 and 6 (adjacent to 5),
+	// so net 2 is forced to track 3.
 	nets := []*common.Net{
 		{ID: 1, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
 		{ID: 2, From: common.RoutingPin{XLow: 0, YLow: 500, YHigh: 500}, To: common.RoutingPin{XLow: 900, YLow: 500, YHigh: 500}},
@@ -50,7 +49,7 @@ func TestIntegration_MultipleNets_DoNotConflict(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
 	assert.Equal(t, 5, results[0].M3.TrackID)
-	assert.Equal(t, 4, results[1].M3.TrackID)
+	assert.Equal(t, 3, results[1].M3.TrackID)
 }
 
 func TestIntegration_OutOfBoundsNet_ReturnsError(t *testing.T) {

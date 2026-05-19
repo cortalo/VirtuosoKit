@@ -75,7 +75,16 @@ func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) (Segment, 
 		NetID:   netID,
 	}
 
+	spacingOK := true
+	if trackID > 0 {
+		spacingOK = r.canvas.IsPassibleM3(TrackSegment{TrackID: trackID - 1, Start: m3.Start, End: m3.End, NetID: netID})
+	}
+	if trackID < maxTrack {
+		spacingOK = spacingOK && r.canvas.IsPassibleM3(TrackSegment{TrackID: trackID + 1, Start: m3.Start, End: m3.End, NetID: netID})
+	}
+
 	return m2From, m2To, m3, r.canvas.IsPassibleM2(m2From) &&
 		r.canvas.IsPassibleM2(m2To) &&
-		r.canvas.IsPassibleM3(m3)
+		r.canvas.IsPassibleM3(m3) &&
+		spacingOK
 }

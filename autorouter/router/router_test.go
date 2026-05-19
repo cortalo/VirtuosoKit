@@ -82,7 +82,8 @@ func TestRoute_MidTrackM3Blocked_FallsBackToNeighbor(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.True(t, m3.TrackID == 4 || m3.TrackID == 6)
+	// spacing rule: must be at least 2 tracks away from blocked track 5
+	assert.True(t, m3.TrackID == 3 || m3.TrackID == 7)
 }
 
 func TestRoute_M2FromBlocked_SkipsTrack(t *testing.T) {
@@ -160,9 +161,9 @@ func TestRoute_SameNetID_IgnoresOwnBlocks(t *testing.T) {
 
 func TestRoute_MidTrackBlocked_ExpandsSymmetrically(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
-	// block track 5, should try 4 and 6 next
+	// block tracks 5 and 6; spacing rule means 4 is also excluded (adjacent to 5)
+	// and 7 is excluded (adjacent to 6), so the first valid track is 3
 	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 99}))
-	// also block track 6, should fall to 4
 	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 6, Start: 0, End: 1000, NetID: 99}))
 	r := newRouter(c)
 
@@ -173,7 +174,7 @@ func TestRoute_MidTrackBlocked_ExpandsSymmetrically(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.Equal(t, 4, m3.TrackID)
+	assert.Equal(t, 3, m3.TrackID)
 }
 
 func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
