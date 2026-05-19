@@ -1,3 +1,9 @@
+[tcb018gbwp7t.INVD1BWP7T]
+pins = [
+  { name = "I",   ll = [100, 100], ur = [200, 300] },
+  { name = "ZN",  ll = [800, 100], ur = [900, 300] },
+]
+
 [tsmc18.nmos2v]
 pins = [
   { name = "D", ll = [335, 40],  ur = [565, 1960] },

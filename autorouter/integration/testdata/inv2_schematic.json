@@ -1,0 +1,19 @@
+{
+  "instances": [
+    {
+      "name": "I0",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T"
+    },
+    {
+      "name": "I1",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T"
+    }
+  ],
+  "nets": {
+    "VIN":  ["I0.I"],
+    "net2": ["I0.ZN", "I1.I"],
+    "VOUT": ["I1.ZN"]
+  }
+}

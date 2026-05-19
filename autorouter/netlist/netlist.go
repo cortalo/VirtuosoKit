@@ -27,10 +27,11 @@ type LayoutShape struct {
 }
 
 type LayoutInstance struct {
-	Name string     `json:"name"`
-	Lib  string     `json:"lib"`
-	Cell string     `json:"cell"`
-	XY   [2]float64 `json:"xy"`
+	Name   string     `json:"name"`
+	Lib    string     `json:"lib"`
+	Cell   string     `json:"cell"`
+	XY     [2]float64 `json:"xy"`
+	Orient string     `json:"orient"`
 }
 
 // Schematic mirrors the schematic JSON structure.
@@ -59,6 +60,29 @@ func prBoundary(shapes []LayoutShape) (lowerLeft, upperRight common.Point, err e
 		}
 	}
 	return common.Point{}, common.Point{}, ErrNoPRBoundary
+}
+
+// parseOrient strips surrounding double-quotes that Virtuoso adds to orient strings
+// (e.g. `"\"MX\""` → `"MX"`) and returns the canonical orientation token.
+func parseOrient(s string) string {
+	s = strings.TrimPrefix(s, "\"")
+	s = strings.TrimSuffix(s, "\"")
+	return s
+}
+
+// transformPin applies an orientation transform to a pin bbox relative to the cell origin.
+// Supported orientations: R0 (identity), MX (mirror Y), MY (mirror X), R180 (rotate 180°).
+func transformPin(xLow, xHigh, yLow, yHigh int, orient string) (int, int, int, int) {
+	switch orient {
+	case "MX":
+		return xLow, xHigh, -yHigh, -yLow
+	case "MY":
+		return -xHigh, -xLow, yLow, yHigh
+	case "R180":
+		return -xHigh, -xLow, -yHigh, -yLow
+	default: // R0 and anything unrecognised
+		return xLow, xHigh, yLow, yHigh
+	}
 }
 
 // BuildNetsFromData builds nets from already-parsed layout and schematic data.
@@ -130,11 +154,12 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			}
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))
+			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 			pins = append(pins, common.RoutingPin{
-				XLow:  instX + xLow,
-				XHigh: instX + xHigh,
-				YLow:  instY + yLow,
-				YHigh: instY + yHigh,
+				XLow:  instX + txLow,
+				XHigh: instX + txHigh,
+				YLow:  instY + tyLow,
+				YHigh: instY + tyHigh,
 			})
 		}
 		if len(pins) < 2 {

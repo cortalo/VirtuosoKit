@@ -1,0 +1,31 @@
+{
+  "lib": "test",
+  "cell": "inv_2",
+  "view": "layout",
+  "shapes": [
+    {
+      "objType": "rect",
+      "layer": "prBoundary",
+      "purpose": "drawing",
+      "bbox": [[-5.0, -10.0], [10.0, 5.0]]
+    }
+  ],
+  "instances": [
+    {
+      "name": "I0",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T",
+      "view": "layout",
+      "xy": [0.0, 0.0],
+      "orient": "\"MX\""
+    },
+    {
+      "name": "I1",
+      "lib": "tcb018gbwp7t",
+      "cell": "INVD1BWP7T",
+      "view": "layout",
+      "xy": [5.0, 0.0],
+      "orient": "\"MY\""
+    }
+  ]
+}
