@@ -17,23 +17,24 @@ var (
 // TOML leaves unset fields at their zero values.
 type rawEntry struct {
 	// metal layer fields
-	MinArea int `toml:"min_area"`
+	MinArea      int `toml:"min_area"`
+	EndExtension int `toml:"end_extension"`
 	// via fields
 	ViaDef string `toml:"via_def"`
 	CutW   int    `toml:"cut_w"`
 	CutH   int    `toml:"cut_h"`
 	SpaceX int    `toml:"space_x"`
 	SpaceY int    `toml:"space_y"`
-	Enc1   [2]int `toml:"enc1"`
-	Enc2   [2]int `toml:"enc2"`
 }
 
 // DRCSpec holds the manufacturing rules for a single metal layer.
 type DRCSpec struct {
-	minArea int
+	minArea      int
+	endExtension int
 }
 
-func (s DRCSpec) MinArea() int { return s.minArea }
+func (s DRCSpec) MinArea() int      { return s.minArea }
+func (s DRCSpec) EndExtension() int { return s.endExtension }
 
 type DB struct {
 	libs map[string]map[string]rawEntry
@@ -56,7 +57,7 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: e.MinArea}, nil
+	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension}, nil
 }
 
 func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {
@@ -74,7 +75,5 @@ func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {
 		CutH:   e.CutH,
 		SpaceX: e.SpaceX,
 		SpaceY: e.SpaceY,
-		Enc1:   e.Enc1,
-		Enc2:   e.Enc2,
 	}, nil
 }

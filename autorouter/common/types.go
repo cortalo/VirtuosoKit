@@ -62,10 +62,7 @@ type ViaConfig struct {
 	CutH   int    // cut height
 	SpaceX int    // cut-to-cut spacing in X
 	SpaceY int    // cut-to-cut spacing in Y
-	Enc1   [2]int // enclosure on layer1 [x, y]
-	Enc2   [2]int // enclosure on layer2 [x, y]
 }
-
 
 type Segment struct {
 	LowerLeft  Point `json:"lower_left"`
@@ -104,9 +101,11 @@ type Net struct {
 
 type DRCSpec interface {
 	MinArea() int
+	EndExtension() int
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
 type NoDRC struct{}
 
-func (NoDRC) MinArea() int { return 0 }
+func (NoDRC) MinArea() int      { return 0 }
+func (NoDRC) EndExtension() int { return 0 }

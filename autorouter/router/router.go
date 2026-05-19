@@ -62,20 +62,22 @@ func (r *TwoLayerRouter) tryTrack(from, to Point, netID, trackID int) (Segment, 
 
 	trackYLower := lowerLeft.Y + trackID*r.canvas.GetM3TrackWidth()
 	trackYUpper := lowerLeft.Y + (trackID+1)*r.canvas.GetM3TrackWidth()
+	m2Ext := r.m2DRC.EndExtension()
+	m3Ext := r.m3DRC.EndExtension()
 	m2From := Segment{
-		LowerLeft:  Point{X: from.X, Y: min(from.Y, trackYLower)},
-		UpperRight: Point{X: from.X + r.m2Width, Y: max(from.Y, trackYUpper)},
+		LowerLeft:  Point{X: from.X, Y: min(from.Y, trackYLower) - m2Ext},
+		UpperRight: Point{X: from.X + r.m2Width, Y: max(from.Y, trackYUpper) + m2Ext},
 		NetID:      netID,
 	}
 	m2To := Segment{
-		LowerLeft:  Point{X: to.X, Y: min(to.Y, trackYLower)},
-		UpperRight: Point{X: to.X + r.m2Width, Y: max(to.Y, trackYUpper)},
+		LowerLeft:  Point{X: to.X, Y: min(to.Y, trackYLower) - m2Ext},
+		UpperRight: Point{X: to.X + r.m2Width, Y: max(to.Y, trackYUpper) + m2Ext},
 		NetID:      netID,
 	}
 	m3 := TrackSegment{
 		TrackID: trackID,
-		Start:   min(from.X, to.X),
-		End:     max(from.X, to.X) + r.m2Width,
+		Start:   min(from.X, to.X) - m3Ext,
+		End:     max(from.X, to.X) + r.m2Width + m3Ext,
 		NetID:   netID,
 	}
 
