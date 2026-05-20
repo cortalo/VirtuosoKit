@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"placer/common"
+	"strings"
 )
 
 type raw struct {
@@ -13,10 +14,11 @@ type raw struct {
 }
 
 type rawInstance struct {
-	Name string     `json:"name"`
-	Lib  string     `json:"lib"`
-	Cell string     `json:"cell"`
-	XY   [2]float64 `json:"xy"`
+	Name   string     `json:"name"`
+	Lib    string     `json:"lib"`
+	Cell   string     `json:"cell"`
+	XY     [2]float64 `json:"xy"`
+	Orient string     `json:"orient"`
 }
 
 // Parse reads schematic JSON from r and returns the instances, excluding any
@@ -51,12 +53,22 @@ func filter(insts []rawInstance, ignoreLibs []string) []common.SchematicInstance
 			continue
 		}
 		result = append(result, common.SchematicInstance{
-			Name: inst.Name,
-			Lib:  inst.Lib,
-			Cell: inst.Cell,
-			X:    inst.XY[0],
-			Y:    inst.XY[1],
+			Name:   inst.Name,
+			Lib:    inst.Lib,
+			Cell:   inst.Cell,
+			X:      inst.XY[0],
+			Y:      inst.XY[1],
+			Orient: parseOrient(inst.Orient),
 		})
 	}
 	return result
+}
+
+// parseOrient converts a Virtuoso orient string (optionally wrapped in extra
+// quotes) to an Orient value, defaulting to R0 on empty or unknown input.
+func parseOrient(s string) common.Orient {
+	s = strings.Trim(s, "\"")
+	var o common.Orient
+	_ = o.UnmarshalText([]byte(s))
+	return o
 }

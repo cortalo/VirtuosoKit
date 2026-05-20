@@ -9,15 +9,42 @@ type CellDB interface {
 	Query(lib, cell string) (width int, err error)
 }
 
+// hasHorizontalFlip reports whether orient contains a MY (left-right mirror)
+// component. The vertical component is ignored because row parity controls it.
+func hasHorizontalFlip(o common.Orient) bool {
+	return o == common.MY || o == common.R180 || o == common.MYR90
+}
+
+// combineOrient merges the row-level vertical flip with the horizontal flip
+// extracted from the schematic orientation.
+//
+//	rowFlipped=false, no hFlip  → R0
+//	rowFlipped=false, hFlip     → MY
+//	rowFlipped=true,  no hFlip  → MX
+//	rowFlipped=true,  hFlip     → R180
+func combineOrient(rowFlipped bool, schOrient common.Orient) common.Orient {
+	hFlip := hasHorizontalFlip(schOrient)
+	switch {
+	case rowFlipped && hFlip:
+		return common.R180
+	case rowFlipped:
+		return common.MX
+	case hFlip:
+		return common.MY
+	default:
+		return common.R0
+	}
+}
+
 // Place converts grouped schematic rows into tightly packed layout instances.
 //
 // Row orientation alternates to align power rails between adjacent rows:
 //   - even rows: R0 at y = i * rowHeight  (VSS at bottom, VDD at top)
 //   - odd rows:  MX at y = (i+1)*rowHeight (cell extends downward, VDD at bottom)
 //
-// This causes adjacent rows to share a rail: VDD-VDD between row 0 and 1,
-// VSS-VSS between row 1 and 2, and so on.
-// Within each row cells are placed left to right starting at x=0.
+// Per-instance orient is derived by combining the row's vertical flip with the
+// horizontal flip present in the schematic orientation (MY component only).
+// Tap cells always follow the row orient.
 //
 // If tapcell is non-nil, each row starts and ends with a tap cell and an
 // additional tap cell is inserted whenever the distance from the last tap cell
@@ -35,13 +62,14 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int, tapcell 
 	}
 
 	for i, row := range rows {
-		var orient common.Orient
+		rowFlipped := i%2 != 0
+		var rowOrient common.Orient
 		var y int
-		if i%2 == 0 {
-			orient = common.R0
+		if !rowFlipped {
+			rowOrient = common.R0
 			y = i * rowHeight
 		} else {
-			orient = common.MX
+			rowOrient = common.MX
 			y = (i + 1) * rowHeight
 		}
 
@@ -56,7 +84,7 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int, tapcell 
 				Cell:   tapcell.Cell,
 				X:      x,
 				Y:      y,
-				Orient: orient,
+				Orient: rowOrient,
 			})
 			x += tapWidth
 			lastTapEnd = x
@@ -78,7 +106,7 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int, tapcell 
 				Cell:   si.Cell,
 				X:      x,
 				Y:      y,
-				Orient: orient,
+				Orient: combineOrient(rowFlipped, si.Orient),
 			})
 			x += width
 

@@ -21,6 +21,10 @@ func si(name, lib, cell string) common.SchematicInstance {
 	return common.SchematicInstance{Name: name, Lib: lib, Cell: cell}
 }
 
+func siO(name, lib, cell string, orient common.Orient) common.SchematicInstance {
+	return common.SchematicInstance{Name: name, Lib: lib, Cell: cell, Orient: orient}
+}
+
 var db = mockDB{
 	"lib/A": 100,
 	"lib/B": 200,
@@ -89,6 +93,25 @@ func TestPlace_UnknownCell_ReturnsError(t *testing.T) {
 	}
 	_, err := Place(rows, db, 400, nil)
 	assert.Error(t, err)
+}
+
+// Covers all four (rowFlipped × hFlip) combinations:
+//
+//	row 0 (even): R0 → R0,  MY  → MY
+//	row 1 (odd):  MX → MX,  R180→ R180
+func TestPlace_Orient_HorizontalFlipPreserved(t *testing.T) {
+	rows := [][]common.SchematicInstance{
+		{siO("i0", "lib", "A", common.R0), siO("i1", "lib", "A", common.MY)},
+		{siO("i2", "lib", "A", common.MX), siO("i3", "lib", "A", common.R180)},
+	}
+	got, err := Place(rows, db, 400, nil)
+	require.NoError(t, err)
+	require.Len(t, got, 4)
+
+	assert.Equal(t, common.R0, got[0].Orient)   // even, no hFlip → R0
+	assert.Equal(t, common.MY, got[1].Orient)   // even, hFlip    → MY
+	assert.Equal(t, common.MX, got[2].Orient)   // odd,  no hFlip → MX
+	assert.Equal(t, common.R180, got[3].Orient) // odd,  hFlip    → R180
 }
 
 // tieWidth=50, MaxSpacing=500: only start and end ties, no mid-row insertion.
