@@ -111,7 +111,8 @@ Key options: `--row-height` (nm, default 3920), `--pr-margin` (nm, default 10000
 ## Autorouter
 
 A two-layer M2/M3 autorouter (Go) that reads layout and schematic data from
-Virtuoso, routes nets, and draws the result back into the layout.
+Virtuoso, routes nets, draws the result back into the layout, and creates
+proper layout pins on M1 for each schematic port.
 
 Build the binary first:
 
@@ -144,5 +145,16 @@ python pnr.py test pfd_mini_delay_1 \
     --row-height 3920
 ```
 
-`pnr.py` places the cell, routes it, then removes the prBoundary helper shape.
+`pnr.py` places the cell, routes it, removes the prBoundary helper shape, and
+optionally opens the Calibre DRC/LVS GUI:
+
+```bash
+python pnr.py test pfd_mini_delay_1 \
+    --process-lib tsmc18 \
+    --ignore-net VDD --ignore-net VSS \
+    --ignore-lib basic \
+    --row-height 3920 \
+    --drc --lvs
+```
+
 Build both binaries before running.
