@@ -100,13 +100,20 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int, tapcell 
 			if err != nil {
 				return nil, fmt.Errorf("place: row %d instance %q: %w", i, si.Name, err)
 			}
+			finalOrient := combineOrient(rowFlipped, si.Orient)
+			// For MY/R180 the instance origin is the right edge (Virtuoso: x'=-x+Xinst),
+			// so shift the reference point by width to keep cells abutted left-to-right.
+			instX := x
+			if hasHorizontalFlip(finalOrient) {
+				instX = x + width
+			}
 			result = append(result, common.Instance{
 				Name:   si.Name,
 				Lib:    si.Lib,
 				Cell:   si.Cell,
-				X:      x,
+				X:      instX,
 				Y:      y,
-				Orient: combineOrient(rowFlipped, si.Orient),
+				Orient: finalOrient,
 			})
 			x += width
 
