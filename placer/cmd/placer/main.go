@@ -40,6 +40,7 @@ func main() {
 	flag.Var(&ignoreLibs, "ignore-lib", "lib to exclude from placement (repeatable)")
 	rowHeight := flag.Int("row-height", 2000, "standard cell row height in nm")
 	rowThreshold := flag.Float64("row-threshold", 1.0, "Y gap threshold in schematic units for row detection")
+	targetWidth := flag.Int("target-width", 0, "maximum row width in nm; 0 disables splitting")
 	verbose := flag.Bool("verbose", false, "print placement progress to stderr")
 	flag.Parse()
 
@@ -60,7 +61,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	for i := range instances {
+		if w, err := db.Query(instances[i].Lib, instances[i].Cell); err == nil {
+			instances[i].Width = w
+		}
+	}
+
 	grouped := rows.Group(instances, *rowThreshold)
+
+	if *targetWidth > 0 {
+		grouped = rows.SplitByWidth(grouped, *targetWidth)
+		grouped = rows.RepackByWidth(grouped, *targetWidth)
+	}
 
 	if *verbose {
 		fmt.Fprintf(os.Stderr, "instances: %d, rows: %d\n", len(instances), len(grouped))

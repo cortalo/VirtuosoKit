@@ -63,6 +63,7 @@ func (o *Orient) UnmarshalText(b []byte) error {
 
 // SchematicInstance is an instance as it appears in the schematic,
 // with coordinates in schematic units (float).
+// Width is the layout cell width in nm; 0 means unknown.
 type SchematicInstance struct {
 	Name   string  `json:"name"`
 	Lib    string  `json:"lib"`
@@ -70,6 +71,7 @@ type SchematicInstance struct {
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	Orient Orient  `json:"orient"`
+	Width  int     `json:"width,omitempty"`
 }
 
 // Instance is a placed layout instance, with coordinates in nm (int).

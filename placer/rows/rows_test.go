@@ -2,6 +2,7 @@ package rows
 
 import (
 	"placer/common"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,6 +70,124 @@ func TestGroup_FiveRows_VaryingSpacing(t *testing.T) {
 	assert.Equal(t, []string{"C1", "C2"}, names(result[2]))
 	assert.Equal(t, []string{"D1", "D2"}, names(result[3]))
 	assert.Equal(t, []string{"E1", "E2"}, names(result[4]))
+}
+
+func instW(name string, width int) common.SchematicInstance {
+	return common.SchematicInstance{Name: name, Width: width}
+}
+
+func groupOf(insts ...common.SchematicInstance) []common.SchematicInstance {
+	return insts
+}
+
+func TestSplitByWidth_Empty(t *testing.T) {
+	assert.Nil(t, SplitByWidth(nil, 1000))
+}
+
+func TestSplitByWidth_AllFitInOne(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 300), instW("B", 300), instW("C", 300)),
+	}
+	result := SplitByWidth(groups, 1000)
+	require.Len(t, result, 1)
+	assert.Equal(t, []string{"A", "B", "C"}, names(result[0]))
+}
+
+func TestSplitByWidth_SplitsWhenFull(t *testing.T) {
+	// 400+400=800 ≤ 1000, adding 400 → 1200 > 1000 → split
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 400), instW("B", 400), instW("C", 400)),
+	}
+	result := SplitByWidth(groups, 1000)
+	require.Len(t, result, 2)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+	assert.Equal(t, []string{"C"}, names(result[1]))
+}
+
+func TestSplitByWidth_ExactFit(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 500), instW("B", 500)),
+	}
+	result := SplitByWidth(groups, 1000)
+	require.Len(t, result, 1)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+}
+
+func TestSplitByWidth_OversizedSingleCell_PlacedAlone(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 300), instW("B", 1500), instW("C", 300)),
+	}
+	result := SplitByWidth(groups, 1000)
+	require.Len(t, result, 3)
+	assert.Equal(t, []string{"A"}, names(result[0]))
+	assert.Equal(t, []string{"B"}, names(result[1]))
+	assert.Equal(t, []string{"C"}, names(result[2]))
+}
+
+func TestSplitByWidth_MultipleInputGroups(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 600), instW("B", 600)),
+		groupOf(instW("C", 400), instW("D", 400), instW("E", 400)),
+	}
+	result := SplitByWidth(groups, 1000)
+	// group1: A(600)+B(600)=1200>1000 → [A],[B]
+	// group2: C+D=800≤1000, +E=1200>1000 → [C,D],[E]
+	require.Len(t, result, 4)
+	assert.Equal(t, []string{"A"}, names(result[0]))
+	assert.Equal(t, []string{"B"}, names(result[1]))
+	assert.Equal(t, []string{"C", "D"}, names(result[2]))
+	assert.Equal(t, []string{"E"}, names(result[3]))
+}
+
+func TestSplitByWidth_ZeroWidthCells_NeverSplit(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 0), instW("B", 0), instW("C", 0)),
+	}
+	result := SplitByWidth(groups, 1000)
+	require.Len(t, result, 1)
+	assert.Equal(t, []string{"A", "B", "C"}, names(result[0]))
+}
+
+func TestRepackByWidth_Empty(t *testing.T) {
+	assert.Nil(t, RepackByWidth(nil, 1000))
+}
+
+func TestRepackByWidth_AllFitInOne(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 300)),
+		groupOf(instW("B", 300)),
+		groupOf(instW("C", 300)),
+	}
+	result := RepackByWidth(groups, 1000)
+	require.Len(t, result, 1)
+	assert.Len(t, result[0], 3)
+}
+
+func TestRepackByWidth_FFD_PacksOptimally(t *testing.T) {
+	// widths: 600, 400, 400, 400 → FFD sorts: 600,400,400,400
+	// bin0: 600 → +400=1000 ✓; bin1: 400 → +400=800 ✓
+	// result: 2 bins of width 1000 and 800
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 400)),
+		groupOf(instW("B", 400)),
+		groupOf(instW("C", 600)),
+		groupOf(instW("D", 400)),
+	}
+	result := RepackByWidth(groups, 1000)
+	require.Len(t, result, 2)
+	widths := []int{totalWidth(result[0]), totalWidth(result[1])}
+	sort.Ints(widths)
+	assert.Equal(t, []int{800, 1000}, widths)
+}
+
+func TestRepackByWidth_OversizedGroup_PlacedAlone(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 1500)),
+		groupOf(instW("B", 300)),
+	}
+	result := RepackByWidth(groups, 1000)
+	// A is oversized → its own bin; B fits in a new bin
+	require.Len(t, result, 2)
 }
 
 func TestGroup_SloppySchematic_WithinRowOffsets(t *testing.T) {
