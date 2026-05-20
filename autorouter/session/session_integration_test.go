@@ -90,6 +90,37 @@ func TestIntegration_MixedNets_SuccessAndError(t *testing.T) {
 	assert.ErrorIs(t, results[1].Err, router.ErrOutOfBound)
 }
 
+// TestIntegration_PinBBoxExtension_M2OverlapPanic reproduces a bug where the
+// session extends M2 to cover pin.YHigh but the router only checked passibility
+// for the un-extended M2 (based on pin.YLow). The grown M2 can overlap a
+// different net's already-occupied M2, causing a panic via lo.Must0.
+//
+// Net 1 pin at YLow=300,YHigh=1000: router M2 Y=[300,400], session extends to [300,1000].
+// Net 2 pin at YLow=100,YHigh=400: router M2 Y=[100,200], touches 300 but no
+// strict overlap → router accepts. Session extends to [100,400] → overlaps [300,1000] → panic.
+func TestIntegration_PinBBoxExtension_M2OverlapPanic(t *testing.T) {
+	c := &canvas.Canvas{
+		LowerLeft:  common.Point{X: 0, Y: 0},
+		UpperRight: common.Point{X: 1000, Y: 1200},
+		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1200}),
+		M3Storage:  canvas.NewTrackSegmentStorage(12, 100),
+	}
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
+	nets := []*common.Net{
+		{ID: 1, Pins: []common.RoutingPin{
+			{XLow: 100, YLow: 300, YHigh: 1000},
+			{XLow: 900, YLow: 300, YHigh: 1000},
+		}},
+		{ID: 2, Pins: []common.RoutingPin{
+			{XLow: 100, YLow: 100, YHigh: 400},
+			{XLow: 900, YLow: 100, YHigh: 400},
+		}},
+	}
+	s := session.NewSession(c, r, &common.Netlist{Nets: nets}, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+
+	assert.NotPanics(t, func() { s.Route() })
+}
+
 func TestIntegration_ThreePinNet_RouteSucceeds(t *testing.T) {
 	nets := []*common.Net{
 		{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(500, 900), pin(900, 200)}},

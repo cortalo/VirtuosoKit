@@ -82,13 +82,6 @@ func (s *Session) Route() []NetResult {
 			continue
 		}
 
-		for j, pin := range net.Pins {
-			m2Segs[j] = extendM2ToCoverPin(m2Segs[j], pin, m2EndExt)
-		}
-		for j := range m2Segs {
-			m2Segs[j].Layer = common.M2
-		}
-
 		ll := s.canvas.GetLowerLeft()
 		tw := s.canvas.GetM3TrackWidth()
 		m3Seg := Segment{
@@ -172,13 +165,5 @@ func pinBBox(pin RoutingPin) Segment {
 	return Segment{
 		LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 		UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
-	}
-}
-
-func extendM2ToCoverPin(m2 Segment, pin RoutingPin, endExt int) Segment {
-	return Segment{
-		LowerLeft:  Point{X: m2.LowerLeft.X, Y: min(m2.LowerLeft.Y, pin.YLow-endExt)},
-		UpperRight: Point{X: m2.UpperRight.X, Y: max(m2.UpperRight.Y, pin.YHigh+endExt)},
-		NetID:      m2.NetID,
 	}
 }

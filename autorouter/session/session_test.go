@@ -63,7 +63,7 @@ func netlist(nets ...*Net) *Netlist {
 }
 
 func seg(x0, y0, x1, y1, netID int) Segment {
-	return Segment{LowerLeft: Point{X: x0, Y: y0}, UpperRight: Point{X: x1, Y: y1}, NetID: netID}
+	return Segment{LowerLeft: Point{X: x0, Y: y0}, UpperRight: Point{X: x1, Y: y1}, NetID: netID, Layer: common.M2}
 }
 
 func track(trackID, start, end, netID int) TrackSegment {
@@ -175,15 +175,7 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
 
-	withM2Layer := func(segs []Segment) []Segment {
-		out := make([]Segment, len(segs))
-		for i, s := range segs {
-			s.Layer = common.M2
-			out[i] = s
-		}
-		return out
-	}
-	wantM2Calls := append(withM2Layer(r1.m2Segs), withM2Layer(r2.m2Segs)...)
+	wantM2Calls := append(r1.m2Segs, r2.m2Segs...)
 	assert.Equal(t, wantM2Calls, canvas.m2Calls)
 	assert.Equal(t, []TrackSegment{r1.m3, r2.m3}, canvas.m3Calls)
 }
