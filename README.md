@@ -88,6 +88,26 @@ python example/agent_place_demo.py
 python example/agent_place_demo.py --debug
 ```
 
+## Placer
+
+A standard-cell placer (Go) that reads schematic instance positions from
+Virtuoso and creates a placed layout.
+
+Build the binary first:
+
+```bash
+cd placer
+go build -o bin/placer ./cmd/placer/
+```
+
+Place a cell:
+
+```bash
+python place.py test pfd_mini_delay_1 --ignore-lib basic --row-height 3920
+```
+
+Key options: `--row-height` (nm, default 3920), `--pr-margin` (nm, default 10000).
+
 ## Autorouter
 
 A two-layer M2/M3 autorouter (Go) that reads layout and schematic data from
@@ -100,15 +120,29 @@ cd autorouter
 go build -o bin/autorouter ./cmd/autorouter/
 ```
 
-Then route a cell:
+Route a cell:
 
 ```bash
-python route.py <lib> <cell> \
+python route.py test pfd_mini_delay_1 \
     --process-lib tsmc18 \
     --ignore-net VDD --ignore-net VSS \
-    --ignore-lib basic \
-    --verbose
+    --ignore-lib basic
 ```
 
 See [`autorouter/README.md`](autorouter/README.md) for full configuration,
 DRC setup (`drcs.toml`, `pins.toml`), the JSON API, and architecture details.
+
+## PnR (Place and Route)
+
+Run placement and routing in one step:
+
+```bash
+python pnr.py test pfd_mini_delay_1 \
+    --process-lib tsmc18 \
+    --ignore-net VDD --ignore-net VSS \
+    --ignore-lib basic \
+    --row-height 3920
+```
+
+`pnr.py` places the cell, routes it, then removes the prBoundary helper shape.
+Build both binaries before running.

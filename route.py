@@ -129,6 +129,11 @@ def main() -> int:
 
     client = VirtuosoClient.local(port=args.port)
 
+    answer = input(f"Add routes to layout {args.lib}/{args.cell}? [y/N] ")
+    if answer.strip().lower() != "y":
+        print("Aborted.")
+        return 0
+
     shapes, instances = read_layout(client, args.lib, args.cell)
 
     schem = read_schematic(client, args.lib, args.cell)
