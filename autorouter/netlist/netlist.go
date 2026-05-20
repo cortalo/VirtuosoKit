@@ -189,6 +189,9 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 
 	var layoutPins []*common.RoutingPin
 	for _, name := range pinNames {
+		if _, skip := ignoredNets[name]; skip {
+			continue
+		}
 		instPinList, ok := schematic.Nets[name]
 		if !ok || len(instPinList) == 0 {
 			continue
