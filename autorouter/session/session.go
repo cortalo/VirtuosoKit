@@ -50,18 +50,18 @@ func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 Via
 }
 
 type NetResult struct {
-	NetID   int       `json:"net_id"`
-	NetName string    `json:"net_name,omitempty"`
+	NetID    int       `json:"net_id"`
+	NetName  string    `json:"net_name,omitempty"`
 	Segments []Segment `json:"segments"`
-	Err     error     `json:"-"`
+	Err      error     `json:"-"`
 }
 
 func (r NetResult) MarshalJSON() ([]byte, error) {
 	type wire struct {
-		NetID   int       `json:"net_id"`
-		NetName string    `json:"net_name,omitempty"`
+		NetID    int       `json:"net_id"`
+		NetName  string    `json:"net_name,omitempty"`
 		Segments []Segment `json:"segments,omitempty"`
-		Error   string    `json:"error,omitempty"`
+		Error    string    `json:"error,omitempty"`
 	}
 	w := wire{NetID: r.NetID, NetName: r.NetName, Segments: r.Segments}
 	if r.Err != nil {
@@ -84,6 +84,8 @@ func (s *Session) Route() []NetResult {
 
 		for j, pin := range net.Pins {
 			m2Segs[j] = extendM2ToCoverPin(m2Segs[j], pin, m2EndExt)
+		}
+		for j := range m2Segs {
 			m2Segs[j].Layer = common.M2
 		}
 
@@ -96,12 +98,16 @@ func (s *Session) Route() []NetResult {
 			Layer:      common.M3,
 		}
 
-		segs := make([]Segment, 0, len(m2Segs)+1)
+		segs := make([]Segment, 0, len(m2Segs))
 		segs = append(segs, m2Segs...)
-		segs = append(segs, m3Seg)
 		for j, pin := range net.Pins {
 			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12, m2EndExt)
-			segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23EndExt)
+		}
+		if m3.Start != m3.End {
+			segs = append(segs, m3Seg)
+			for j := range net.Pins {
+				segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23EndExt)
+			}
 		}
 
 		results[i] = NetResult{NetID: net.ID, NetName: net.Name, Segments: segs}
@@ -109,7 +115,9 @@ func (s *Session) Route() []NetResult {
 		for _, m2 := range m2Segs {
 			lo.Must0(s.canvas.OccupyM2(m2))
 		}
-		lo.Must0(s.canvas.OccupyM3(m3))
+		if m3.Start != m3.End {
+			lo.Must0(s.canvas.OccupyM3(m3))
+		}
 	}
 	pinSegs := make([]Segment, 0, len(s.netlist.Pins))
 	for _, pin := range s.netlist.Pins {

@@ -24,6 +24,11 @@ func newRouter(c *canvas.Canvas) *router.TwoLayerRouter {
 	return router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 }
 
+type m3MinAreaDRC struct{ area int }
+
+func (d m3MinAreaDRC) MinArea() int      { return d.area }
+func (d m3MinAreaDRC) EndExtension() int { return 0 }
+
 func pins(coords ...[2]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))
 	for i, c := range coords {
@@ -174,4 +179,42 @@ func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
 	_, m3_2, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 2)
 	require.NoError(t, err)
 	assert.NotEqual(t, m3_1.TrackID, m3_2.TrackID)
+}
+
+// --- M2-only fallback ---
+
+// Two pins at the same X with fully overlapping Y ranges → M3 area = m2Width*trackWidth = 100.
+// Setting M3 minArea=200 forces the M2-only fallback: two per-pin M2 stubs + one horizontal M2.
+//
+// Canvas: 1000x1000, trackWidth=100. Pins at X=100, Y=[400,500].
+// midY=400 → midTrack=4 → trackYLower=400, trackYUpper=500.
+// per-pin stubs: X=[100,101], Y=[400,500] (pin touches track exactly, no ext on either side).
+// m2Horiz:       X=[100,101], Y=[400,500] (minX=maxX=100, no m3Ext).
+func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, m3MinAreaDRC{area: 200})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 400, YHigh: 500},
+		{XLow: 100, YLow: 400, YHigh: 500},
+	}
+
+	m2Segs, m3, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, -1, m3.TrackID, "M2-only sentinel")
+	require.Len(t, m2Segs, 3, "2 per-pin stubs + 1 m2Horiz")
+
+	for i := 0; i < 2; i++ {
+		assert.Equal(t, 100, m2Segs[i].LowerLeft.X, "stub[%d] XLow", i)
+		assert.Equal(t, 101, m2Segs[i].UpperRight.X, "stub[%d] XHigh", i)
+		assert.Equal(t, 400, m2Segs[i].LowerLeft.Y, "stub[%d] YLow", i)
+		assert.Equal(t, 500, m2Segs[i].UpperRight.Y, "stub[%d] YHigh", i)
+	}
+
+	m2Horiz := m2Segs[2]
+	assert.Equal(t, 100, m2Horiz.LowerLeft.X)
+	assert.Equal(t, 101, m2Horiz.UpperRight.X)
+	assert.Equal(t, 400, m2Horiz.LowerLeft.Y)
+	assert.Equal(t, 500, m2Horiz.UpperRight.Y)
 }

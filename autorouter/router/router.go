@@ -109,11 +109,6 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 		return nil, TrackSegment{}, false
 	}
 
-	m3Area := (m3.End - m3.Start) * r.canvas.GetM3TrackWidth()
-	if m3Area < r.m3DRC.MinArea() {
-		return nil, TrackSegment{}, false
-	}
-
 	for _, m2 := range m2Segs {
 		if !r.canvas.IsPassibleM2(m2) {
 			return nil, TrackSegment{}, false
@@ -122,6 +117,34 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 		if m2Area < r.m2DRC.MinArea() {
 			return nil, TrackSegment{}, false
 		}
+	}
+
+	m3Area := (m3.End - m3.Start) * r.canvas.GetM3TrackWidth()
+	if m3Area < r.m3DRC.MinArea() {
+		for i, pin := range pins {
+			yLow := trackYLower
+			if pin.YLow < trackYLower {
+				yLow = pin.YLow - m2Ext
+			}
+			yHigh := trackYUpper
+			if pin.YLow > trackYUpper {
+				yHigh = pin.YLow + m2Ext
+			}
+			m2Segs[i] = Segment{
+				LowerLeft:  Point{X: pin.XLow, Y: yLow},
+				UpperRight: Point{X: pin.XLow + r.m2Width, Y: yHigh},
+				NetID:      netID,
+			}
+		}
+		m2Horiz := Segment{
+			LowerLeft:  Point{X: minX, Y: trackYLower},
+			UpperRight: Point{X: maxX + r.m2Width, Y: trackYUpper},
+			NetID:      netID,
+		}
+		if !r.canvas.IsPassibleM2(m2Horiz) {
+			return nil, TrackSegment{}, false
+		}
+		return append(m2Segs, m2Horiz), TrackSegment{TrackID: -1}, true
 	}
 
 	return m2Segs, m3, true
