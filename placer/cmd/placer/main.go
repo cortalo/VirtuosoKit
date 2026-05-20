@@ -16,6 +16,7 @@ import (
 
 type response struct {
 	Instances []common.Instance `json:"instances"`
+	NumRows   int               `json:"num_rows"`
 }
 
 type ignoreLibFlag []string
@@ -79,7 +80,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := json.NewEncoder(os.Stdout).Encode(response{Instances: placed}); err != nil {
+	if err := json.NewEncoder(os.Stdout).Encode(response{Instances: placed, NumRows: len(grouped)}); err != nil {
 		fmt.Fprintf(os.Stderr, "error: encode response: %v\n", err)
 		os.Exit(1)
 	}
