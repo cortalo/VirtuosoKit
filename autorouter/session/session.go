@@ -114,6 +114,7 @@ func (s *Session) Route() []NetResult {
 		pinSegs = append(pinSegs, Segment{
 			LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 			UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
+			Layer:      common.M1,
 			Name:       pin.Name,
 			Purpose:    common.Pin,
 		})

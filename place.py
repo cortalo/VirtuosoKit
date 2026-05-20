@@ -124,10 +124,11 @@ def main() -> int:
     payload = {
         "instances": [
             {
-                "name": inst["name"],
-                "lib":  inst["lib"],
-                "cell": inst["cell"],
-                "xy":   bbox_center(inst.get("bBox")),
+                "name":   inst["name"],
+                "lib":    inst["lib"],
+                "cell":   inst["cell"],
+                "xy":     bbox_center(inst.get("bBox")),
+                "orient": inst.get("orient", "R0"),
             }
             for inst in data["instances"]
             if bbox_center(inst.get("bBox")) is not None

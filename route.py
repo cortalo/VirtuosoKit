@@ -22,7 +22,7 @@ from pathlib import Path
 from virtuoso_bridge import VirtuosoClient
 from virtuoso_bridge.models import ExecutionStatus
 from virtuoso_bridge.virtuoso.layout import parse_layout_geometry_output
-from virtuoso_bridge.virtuoso.layout.ops import layout_create_rect, layout_read_geometry
+from virtuoso_bridge.virtuoso.layout.ops import layout_create_label, layout_create_rect, layout_read_geometry
 from virtuoso_bridge.virtuoso.ops import save_current_cellview
 from virtuoso_bridge.virtuoso.schematic.reader import read_schematic
 
@@ -30,6 +30,7 @@ HERE = Path(__file__).parent
 DEFAULT_BINARY = HERE / "autorouter/bin/autorouter"
 
 LAYER_MAP = {
+    "M1":    ("METAL1", "drawing"),
     "M2":    ("METAL2", "drawing"),
     "M3":    ("METAL3", "drawing"),
     "Via12": ("VIA12",  "drawing"),
@@ -39,6 +40,21 @@ LAYER_MAP = {
 
 def nm_to_um(v: int) -> float:
     return v / 1000.0
+
+
+def layout_create_pin(layer: str, name: str, direction: str,
+                      llx: float, lly: float, urx: float, ury: float) -> str:
+    """Build SKILL to create a proper Virtuoso layout pin with label."""
+    cx = (llx + urx) / 2
+    cy = (lly + ury) / 2
+    pin_skill = (
+        f'leCreatePin(cv list("{layer}" "pin") "rectangle" '
+        f'list(list({llx:g} {lly:g}) list({urx:g} {ury:g})) '
+        f'"{name}" "{direction}" '
+        f'list("top" "bottom" "left" "right"))'
+    )
+    label_skill = layout_create_label(layer, "pin", cx, cy, name, "centerCenter", "R0", "roman", 0.1)
+    return f'prog(nil {pin_skill} {label_skill})'
 
 
 def _skill(client: VirtuosoClient, cmd: str) -> None:
@@ -79,12 +95,19 @@ def draw_routes(client: VirtuosoClient, lib: str, cell: str, routes: list[dict])
             continue
         for seg in route.get("segments", []):
             ll, ur = seg["lower_left"], seg["upper_right"]
-            layer = LAYER_MAP[seg["layer"]]
-            _skill(client, layout_create_rect(
-                *layer,
-                nm_to_um(ll["x"]), nm_to_um(ll["y"]),
-                nm_to_um(ur["x"]), nm_to_um(ur["y"]),
-            ))
+            metal_layer, _ = LAYER_MAP[seg["layer"]]
+            if seg.get("purpose") == "pin":
+                _skill(client, layout_create_pin(
+                    metal_layer, seg["name"], "inputOutput",
+                    nm_to_um(ll["x"]), nm_to_um(ll["y"]),
+                    nm_to_um(ur["x"]), nm_to_um(ur["y"]),
+                ))
+            else:
+                _skill(client, layout_create_rect(
+                    metal_layer, "drawing",
+                    nm_to_um(ll["x"]), nm_to_um(ll["y"]),
+                    nm_to_um(ur["x"]), nm_to_um(ur["y"]),
+                ))
             drawn += 1
     _skill(client, save_current_cellview())
     return drawn
@@ -145,7 +168,7 @@ def main() -> int:
 
     payload = {
         "layout":    {"shapes": shapes, "instances": instances},
-        "schematic": {"instances": schem_instances, "nets": nets},
+        "schematic": {"instances": schem_instances, "nets": nets, "pins": schem.get("pins", {})},
     }
 
     cmd = [

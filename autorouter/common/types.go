@@ -13,7 +13,8 @@ type Point struct {
 type Layer int
 
 const (
-	M2 Layer = iota + 1
+	M1 Layer = iota + 1
+	M2
 	M3
 	Via12
 	Via23
@@ -21,6 +22,8 @@ const (
 
 func (l Layer) MarshalJSON() ([]byte, error) {
 	switch l {
+	case M1:
+		return json.Marshal("M1")
 	case M2:
 		return json.Marshal("M2")
 	case M3:
@@ -40,6 +43,8 @@ func (l *Layer) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	switch s {
+	case "M1":
+		*l = M1
 	case "M2":
 		*l = M2
 	case "M3":

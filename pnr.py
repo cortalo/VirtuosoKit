@@ -43,6 +43,15 @@ def remove_pr_boundary(client: VirtuosoClient, lib: str, cell: str) -> None:
     print(f"Removed prBoundary from {lib}/{cell}")
 
 
+def run_calibre(client: VirtuosoClient, check: str) -> None:
+    skill_cmd = (
+        f'mgc_custom_menus_run_menu_cmd("{check}" '
+        f'"::CalibreInterface::execCalibre {check}" \'nil ?code "")'
+    )
+    print(f"Starting {check} GUI, please wait for the window to pop up...")
+    _skill(client, skill_cmd)
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Place and route a Virtuoso cell."
@@ -79,6 +88,12 @@ def parse_args() -> argparse.Namespace:
                    help="Virtuoso bridge TCP port (default: 65432)")
     p.add_argument("--verbose", action="store_true",
                    help="Print progress to stderr")
+
+    # calibre
+    p.add_argument("--drc", action="store_true",
+                   help="Run Calibre DRC after PnR")
+    p.add_argument("--lvs", action="store_true",
+                   help="Run Calibre LVS after PnR")
     return p.parse_args()
 
 
@@ -122,6 +137,12 @@ def main() -> int:
 
     client = VirtuosoClient.local(port=args.port)
     remove_pr_boundary(client, args.lib, args.cell)
+
+    if args.drc:
+        run_calibre(client, "DRC")
+    if args.lvs:
+        run_calibre(client, "LVS")
+
     return 0
 
 

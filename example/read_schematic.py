@@ -1,4 +1,4 @@
-"""Read the inverter schematic and save minimal connectivity as JSON."""
+"""Read schematic and dump instances, nets, and pins as JSON."""
 
 import json
 from virtuoso_bridge import VirtuosoClient
@@ -8,17 +8,11 @@ client = VirtuosoClient.local(port=65432)
 
 data = read_schematic(client, "test", "inv_2")
 
-minimal = {
-    "instances": [
-        {"name": inst["name"], "lib": inst["lib"], "cell": inst["cell"], "terms": inst["terms"]}
-        for inst in data["instances"]
-    ],
-    "nets": {
-        name: net["connections"]
-        for name, net in data["nets"].items()
-    },
-}
+instances = [
+    {"name": inst["name"], "lib": inst["lib"], "cell": inst["cell"]}
+    for inst in data["instances"]
+]
 
-with open("inv_2_schematic.json", "w") as f:
-    json.dump(minimal, f, indent=2)
-print(f"Saved {len(minimal['instances'])} instances, {len(minimal['nets'])} nets to inv_schematic.json")
+nets = {name: net["connections"] for name, net in data["nets"].items()}
+
+print(json.dumps({"instances": instances, "nets": nets, "pins": data["pins"]}, indent=2))
