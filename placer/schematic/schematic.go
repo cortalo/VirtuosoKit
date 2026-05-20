@@ -6,8 +6,33 @@ import (
 	"io"
 	"os"
 	"placer/common"
+	"regexp"
+	"strconv"
 	"strings"
 )
+
+var busRangeRE = regexp.MustCompile(`^(.*)<(\d+):(\d+)>$`)
+
+func expandBusName(name string) []string {
+	m := busRangeRE.FindStringSubmatch(name)
+	if m == nil {
+		return []string{name}
+	}
+	base := m[1]
+	high, _ := strconv.Atoi(m[2])
+	low, _ := strconv.Atoi(m[3])
+	var result []string
+	if high >= low {
+		for i := high; i >= low; i-- {
+			result = append(result, fmt.Sprintf("%s<%d>", base, i))
+		}
+	} else {
+		for i := high; i <= low; i++ {
+			result = append(result, fmt.Sprintf("%s<%d>", base, i))
+		}
+	}
+	return result
+}
 
 type raw struct {
 	Instances []rawInstance `json:"instances"`
@@ -52,14 +77,16 @@ func filter(insts []rawInstance, ignoreLibs []string) []common.SchematicInstance
 		if _, skip := ignored[inst.Lib]; skip {
 			continue
 		}
-		result = append(result, common.SchematicInstance{
-			Name:   inst.Name,
-			Lib:    inst.Lib,
-			Cell:   inst.Cell,
-			X:      inst.XY[0],
-			Y:      inst.XY[1],
-			Orient: parseOrient(inst.Orient),
-		})
+		for _, name := range expandBusName(inst.Name) {
+			result = append(result, common.SchematicInstance{
+				Name:   name,
+				Lib:    inst.Lib,
+				Cell:   inst.Cell,
+				X:      inst.XY[0],
+				Y:      inst.XY[1],
+				Orient: parseOrient(inst.Orient),
+			})
+		}
 	}
 	return result
 }

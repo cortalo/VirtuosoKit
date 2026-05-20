@@ -1,0 +1,45 @@
+{
+  "instances": [
+    {
+      "name": "I0<14:0>",
+      "lib": "tcb018gbwp7t",
+      "cell": "AN2D1BWP7T",
+      "xy": [
+        -0.5625,
+        -0.1875
+      ],
+      "orient": "R0"
+    },
+    {
+      "name": "I1<3:0>",
+      "lib": "tcb018gbwp7t",
+      "cell": "OR4D1BWP7T",
+      "xy": [
+        1.6875,
+        -0.21875
+      ],
+      "orient": "R0"
+    },
+    {
+      "name": "I5",
+      "lib": "tcb018gbwp7t",
+      "cell": "OR4D1BWP7T",
+      "xy": [
+        3.6875,
+        -0.21875
+      ],
+      "orient": "R0"
+    },
+    {
+      "name": "I6",
+      "lib": "tcb018gbwp7t",
+      "cell": "MUX2D1BWP7T",
+      "xy": [
+        5.4375,
+        -0.0625
+      ],
+      "orient": "R0"
+    }
+  ]
+}
+
