@@ -35,14 +35,28 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 
 	const m3TrackWidth = 100
 
-	ll, ur, nets, err := netlist.BuildNets(
+	ll, ur, nl, err := netlist.BuildNets(
 		"testdata/inv2_layout.json",
 		"testdata/inv2_schematic.json",
 		db,
 		nil, nil,
 	)
 	require.NoError(t, err)
-	require.Len(t, nets, 1, "only net2 has 2+ pins")
+	require.Len(t, nl.Nets, 1, "only net2 has 2+ pins")
+
+	// VIN → I0.I (MX at 0,0): I pin YLow/YHigh negated
+	// VOUT → I1.ZN (MY at 5000,0): ZN pin X negated then shifted
+	require.Len(t, nl.Pins, 2)
+	assert.Equal(t, "VIN", nl.Pins[0].Name)
+	assert.Equal(t, 100, nl.Pins[0].XLow)
+	assert.Equal(t, 200, nl.Pins[0].XHigh)
+	assert.Equal(t, -300, nl.Pins[0].YLow)
+	assert.Equal(t, -100, nl.Pins[0].YHigh)
+	assert.Equal(t, "VOUT", nl.Pins[1].Name)
+	assert.Equal(t, 4100, nl.Pins[1].XLow)
+	assert.Equal(t, 4200, nl.Pins[1].XHigh)
+	assert.Equal(t, 100, nl.Pins[1].YLow)
+	assert.Equal(t, 300, nl.Pins[1].YHigh)
 
 	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
 	c := &canvas.Canvas{
@@ -52,11 +66,12 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
-	s := session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
 
 	results := s.Route()
 
-	require.Len(t, results, 1)
+	// results[0] = routed net; results[1] = pin segments (NetID=0)
+	require.Len(t, results, 2)
 	require.NoError(t, results[0].Err, "net2 should route without error")
 
 	segs := results[0].Segments
@@ -117,14 +132,14 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 
 	const m3TrackWidth = 100
 
-	ll, ur, nets, err := netlist.BuildNets(
+	ll, ur, nl, err := netlist.BuildNets(
 		"testdata/inv_layout.json",
 		"testdata/inv_schematic.json",
 		db,
 		nil, nil,
 	)
 	require.NoError(t, err)
-	require.Len(t, nets, 1)
+	require.Len(t, nl.Nets, 1)
 
 	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
 	c := &canvas.Canvas{
@@ -134,7 +149,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
-	s := session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
 
 	results := s.Route()
 

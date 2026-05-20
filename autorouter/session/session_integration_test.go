@@ -19,7 +19,8 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
-	return session.NewSession(c, r, nets, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+	nl := &common.Netlist{Nets: nets}
+	return session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
 }
 
 // trackIDFromResult finds the M3 segment by layer and returns its track ID.

@@ -58,6 +58,10 @@ func makeNet(id, fx, fy, tx, ty int) *Net {
 	}
 }
 
+func netlist(nets ...*Net) *Netlist {
+	return &Netlist{Nets: nets}
+}
+
 func seg(x0, y0, x1, y1, netID int) Segment {
 	return Segment{LowerLeft: Point{X: x0, Y: y0}, UpperRight: Point{X: x1, Y: y1}, NetID: netID}
 }
@@ -90,7 +94,7 @@ func m3FromResult(res NetResult) Segment {
 // --- tests ---
 
 func TestRoute_EmptyNets_ReturnsEmptyResults(t *testing.T) {
-	s := &Session{canvas: &mockCanvas{}, router: &mockRouter{}, nets: nil, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
+	s := &Session{canvas: &mockCanvas{}, router: &mockRouter{}, netlist: &Netlist{}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 	results := s.Route()
 	assert.Empty(t, results)
 }
@@ -102,7 +106,7 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 
 	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
+	s := &Session{canvas: canvas, router: router, netlist: netlist(makeNet(1, 0, 100, 100, 100)), m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	results := s.Route()
 
@@ -125,7 +129,7 @@ func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
 
 	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 100, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
+	s := &Session{canvas: canvas, router: router, netlist: netlist(makeNet(1, 0, 100, 100, 100)), m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	s.Route()
 
@@ -141,7 +145,7 @@ func TestRoute_SingleNet_RouteError_SkipsOccupy(t *testing.T) {
 	routeErr := errors.New("no path")
 	router := &mockRouter{results: []routeResult{{err: routeErr}}}
 	canvas := &mockCanvas{}
-	s := &Session{canvas: canvas, router: router, nets: []*Net{makeNet(1, 0, 0, 100, 100)}, m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
+	s := &Session{canvas: canvas, router: router, netlist: netlist(makeNet(1, 0, 0, 100, 100)), m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	results := s.Route()
 
@@ -158,11 +162,11 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
 	s := &Session{
-		canvas: canvas,
-		router: router,
-		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
-		m2DRC:  common.NoDRC{},
-		m3DRC:  common.NoDRC{},
+		canvas:  canvas,
+		router:  router,
+		netlist: netlist(makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)),
+		m2DRC:   common.NoDRC{},
+		m3DRC:   common.NoDRC{},
 	}
 
 	results := s.Route()
@@ -192,11 +196,11 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
 	s := &Session{
-		canvas: canvas,
-		router: router,
-		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
-		m2DRC:  common.NoDRC{},
-		m3DRC:  common.NoDRC{},
+		canvas:  canvas,
+		router:  router,
+		netlist: netlist(makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)),
+		m2DRC:   common.NoDRC{},
+		m3DRC:   common.NoDRC{},
 	}
 
 	results := s.Route()
@@ -221,11 +225,11 @@ func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
 	s := &Session{
-		canvas: canvas,
-		router: router,
-		nets:   []*Net{makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)},
-		m2DRC:  common.NoDRC{},
-		m3DRC:  common.NoDRC{},
+		canvas:  canvas,
+		router:  router,
+		netlist: netlist(makeNet(1, 0, 0, 100, 100), makeNet(2, 0, 0, 100, 200)),
+		m2DRC:   common.NoDRC{},
+		m3DRC:   common.NoDRC{},
 	}
 
 	results := s.Route()

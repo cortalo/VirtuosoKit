@@ -15,5 +15,15 @@
     "VIN":  ["I0.I"],
     "net2": ["I0.ZN", "I1.I"],
     "VOUT": ["I1.ZN"]
+  },
+  "pins": {
+    "VIN": {
+      "direction": "input",
+      "numBits": 1
+    },
+    "VOUT": {
+      "direction": "output",
+      "numBits": 1
+    }
   }
 }

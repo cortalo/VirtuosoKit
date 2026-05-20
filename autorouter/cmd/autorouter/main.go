@@ -123,7 +123,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nets, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs)
+	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)
@@ -142,12 +142,12 @@ func main() {
 	via23 := loadViaConfig(drcDB, *processLib, "Via23")
 	if *verbose {
 		fmt.Fprintf(os.Stderr, "canvas: ll=%v ur=%v tracks=%d\n", ll, ur, trackCount)
-		fmt.Fprintf(os.Stderr, "nets: %d to route\n", len(nets))
+		fmt.Fprintf(os.Stderr, "nets: %d to route\n", len(nl.Nets))
 		fmt.Fprintf(os.Stderr, "via12: %+v\n", via12)
 		fmt.Fprintf(os.Stderr, "via23: %+v\n", via23)
 	}
 
-	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nets, via12, via23, m2DRC, m3DRC)
+	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nl, via12, via23, m2DRC, m3DRC)
 	routes := s.Route()
 
 	if *verbose {

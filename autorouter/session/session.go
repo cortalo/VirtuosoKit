@@ -12,6 +12,7 @@ type Segment = common.Segment
 type TrackSegment = common.TrackSegment
 type RoutingPin = common.RoutingPin
 type Net = common.Net
+type Netlist = common.Netlist
 type ViaConfig = common.ViaConfig
 type DRCSpec = common.DRCSpec
 
@@ -27,24 +28,24 @@ type Router interface {
 }
 
 type Session struct {
-	canvas Canvas
-	router Router
-	nets   []*Net
-	via12  ViaConfig
-	via23  ViaConfig
-	m2DRC  DRCSpec
-	m3DRC  DRCSpec
+	canvas  Canvas
+	router  Router
+	netlist *Netlist
+	via12   ViaConfig
+	via23   ViaConfig
+	m2DRC   DRCSpec
+	m3DRC   DRCSpec
 }
 
-func NewSession(canvas Canvas, router Router, nets []*Net, via12, via23 ViaConfig, m2DRC, m3DRC DRCSpec) *Session {
+func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 ViaConfig, m2DRC, m3DRC DRCSpec) *Session {
 	return &Session{
-		canvas: canvas,
-		router: router,
-		nets:   nets,
-		via12:  via12,
-		via23:  via23,
-		m2DRC:  m2DRC,
-		m3DRC:  m3DRC,
+		canvas:  canvas,
+		router:  router,
+		netlist: netlist,
+		via12:   via12,
+		via23:   via23,
+		m2DRC:   m2DRC,
+		m3DRC:   m3DRC,
 	}
 }
 
@@ -68,11 +69,11 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Session) Route() []NetResult {
-	results := make([]NetResult, len(s.nets))
+	results := make([]NetResult, len(s.netlist.Nets))
 	m2EndExt := s.m2DRC.EndExtension()
 	via23EndExt := max(s.m2DRC.EndExtension(), s.m3DRC.EndExtension())
 
-	for i, net := range s.nets {
+	for i, net := range s.netlist.Nets {
 		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
 		if err != nil {
 			results[i] = NetResult{NetID: net.ID, Err: err}
@@ -107,6 +108,18 @@ func (s *Session) Route() []NetResult {
 			lo.Must0(s.canvas.OccupyM2(m2))
 		}
 		lo.Must0(s.canvas.OccupyM3(m3))
+	}
+	pinSegs := make([]Segment, 0, len(s.netlist.Pins))
+	for _, pin := range s.netlist.Pins {
+		pinSegs = append(pinSegs, Segment{
+			LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
+			UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
+			Name:       pin.Name,
+			Purpose:    common.Pin,
+		})
+	}
+	if len(pinSegs) > 0 {
+		results = append(results, NetResult{Segments: pinSegs})
 	}
 	return results
 }
