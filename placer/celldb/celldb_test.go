@@ -75,3 +75,39 @@ func TestLoad_InvalidFile_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, errors.Unwrap(err))
 }
+
+func TestLoad_WithTapcell_ReturnsTapcellConfig(t *testing.T) {
+	path := writeToml(t, `
+[tapcell]
+lib = "mylib"
+cell = "TIE"
+max_spacing = 50000
+
+[mylib.CellA]
+width = 1000
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+
+	tc, ok := db.Tapcell()
+	require.True(t, ok)
+	assert.Equal(t, "mylib", tc.Lib)
+	assert.Equal(t, "TIE", tc.Cell)
+	assert.Equal(t, 50000, tc.MaxSpacing)
+
+	w, err := db.Query("mylib", "CellA")
+	require.NoError(t, err)
+	assert.Equal(t, 1000, w)
+}
+
+func TestLoad_WithoutTapcell_ReturnsFalse(t *testing.T) {
+	path := writeToml(t, `
+[mylib.CellA]
+width = 1000
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+
+	_, ok := db.Tapcell()
+	assert.False(t, ok)
+}

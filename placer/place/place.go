@@ -18,8 +18,22 @@ type CellDB interface {
 // This causes adjacent rows to share a rail: VDD-VDD between row 0 and 1,
 // VSS-VSS between row 1 and 2, and so on.
 // Within each row cells are placed left to right starting at x=0.
-func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int) ([]common.Instance, error) {
+//
+// If tapcell is non-nil, each row starts and ends with a tap cell and an
+// additional tap cell is inserted whenever the distance from the last tap cell
+// exceeds tapcell.MaxSpacing. Inserted tap cells are named _TAP_R{row}_{idx}.
+func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int, tapcell *common.TapcellConfig) ([]common.Instance, error) {
 	var result []common.Instance
+
+	var tapWidth int
+	if tapcell != nil {
+		var err error
+		tapWidth, err = db.Query(tapcell.Lib, tapcell.Cell)
+		if err != nil {
+			return nil, fmt.Errorf("place: tapcell: %w", err)
+		}
+	}
+
 	for i, row := range rows {
 		var orient common.Orient
 		var y int
@@ -32,6 +46,27 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int) ([]commo
 		}
 
 		x := 0
+		tapIdx := 0
+		lastTapEnd := 0
+
+		placeTap := func() {
+			result = append(result, common.Instance{
+				Name:   fmt.Sprintf("_TAP_R%d_%d", i, tapIdx),
+				Lib:    tapcell.Lib,
+				Cell:   tapcell.Cell,
+				X:      x,
+				Y:      y,
+				Orient: orient,
+			})
+			x += tapWidth
+			lastTapEnd = x
+			tapIdx++
+		}
+
+		if tapcell != nil {
+			placeTap()
+		}
+
 		for _, si := range row {
 			width, err := db.Query(si.Lib, si.Cell)
 			if err != nil {
@@ -46,6 +81,14 @@ func Place(rows [][]common.SchematicInstance, db CellDB, rowHeight int) ([]commo
 				Orient: orient,
 			})
 			x += width
+
+			if tapcell != nil && x-lastTapEnd > tapcell.MaxSpacing {
+				placeTap()
+			}
+		}
+
+		if tapcell != nil {
+			placeTap()
 		}
 	}
 	return result, nil

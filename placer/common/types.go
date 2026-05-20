@@ -81,3 +81,11 @@ type Instance struct {
 	Y      int    `json:"y"`
 	Orient Orient `json:"orient"`
 }
+
+// TapcellConfig specifies which cell to use for tap cell insertion and
+// the maximum allowed spacing between tap cells within a row (in nm).
+type TapcellConfig struct {
+	Lib        string
+	Cell       string
+	MaxSpacing int
+}

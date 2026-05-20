@@ -26,7 +26,7 @@ func TestIntegration_TwoInverters_OneRow(t *testing.T) {
 	db, err := celldb.Load("testdata/cells.toml")
 	require.NoError(t, err)
 
-	placed, err := place.Place(grouped, db, 2000)
+	placed, err := place.Place(grouped, db, 2000, nil)
 	require.NoError(t, err)
 	require.Len(t, placed, 2)
 
@@ -72,7 +72,7 @@ func TestIntegration_ThreeRows(t *testing.T) {
 	db, err := celldb.Load("testdata/cells.toml")
 	require.NoError(t, err)
 
-	placed, err := place.Place(grouped, db, 2000)
+	placed, err := place.Place(grouped, db, 2000, nil)
 	require.NoError(t, err)
 	require.Len(t, placed, 9)
 

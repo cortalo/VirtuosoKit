@@ -68,7 +68,12 @@ func main() {
 		}
 	}
 
-	placed, err := place.Place(grouped, db, *rowHeight)
+	var tapcell *common.TapcellConfig
+	if tc, ok := db.Tapcell(); ok {
+		tapcell = &tc
+	}
+
+	placed, err := place.Place(grouped, db, *rowHeight, tapcell)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: place: %v\n", err)
 		os.Exit(1)
