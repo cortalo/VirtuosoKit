@@ -177,6 +177,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		}
 		nets = append(nets, &common.Net{
 			ID:   netID + 1,
+			Name: name,
 			Pins: pins,
 		})
 	}

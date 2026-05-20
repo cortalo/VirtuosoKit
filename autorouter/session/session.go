@@ -50,18 +50,20 @@ func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 Via
 }
 
 type NetResult struct {
-	NetID    int       `json:"net_id"`
+	NetID   int       `json:"net_id"`
+	NetName string    `json:"net_name,omitempty"`
 	Segments []Segment `json:"segments"`
-	Err      error     `json:"-"`
+	Err     error     `json:"-"`
 }
 
 func (r NetResult) MarshalJSON() ([]byte, error) {
 	type wire struct {
-		NetID    int       `json:"net_id"`
+		NetID   int       `json:"net_id"`
+		NetName string    `json:"net_name,omitempty"`
 		Segments []Segment `json:"segments,omitempty"`
-		Error    string    `json:"error,omitempty"`
+		Error   string    `json:"error,omitempty"`
 	}
-	w := wire{NetID: r.NetID, Segments: r.Segments}
+	w := wire{NetID: r.NetID, NetName: r.NetName, Segments: r.Segments}
 	if r.Err != nil {
 		w.Error = r.Err.Error()
 	}
@@ -76,7 +78,7 @@ func (s *Session) Route() []NetResult {
 	for i, net := range s.netlist.Nets {
 		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
 		if err != nil {
-			results[i] = NetResult{NetID: net.ID, Err: err}
+			results[i] = NetResult{NetID: net.ID, NetName: net.Name, Err: err}
 			continue
 		}
 
@@ -102,7 +104,7 @@ func (s *Session) Route() []NetResult {
 			segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23EndExt)
 		}
 
-		results[i] = NetResult{NetID: net.ID, Segments: segs}
+		results[i] = NetResult{NetID: net.ID, NetName: net.Name, Segments: segs}
 
 		for _, m2 := range m2Segs {
 			lo.Must0(s.canvas.OccupyM2(m2))

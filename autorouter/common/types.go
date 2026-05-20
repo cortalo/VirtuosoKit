@@ -138,6 +138,7 @@ type RoutingPin struct {
 
 type Net struct {
 	ID   int
+	Name string
 	Pins []RoutingPin
 }
 
