@@ -1,127 +1,91 @@
-# LangGraph + Virtuoso Bridge
+# VirtuosoKit
 
-LangGraph agents that execute SKILL in a running Virtuoso session,
-built on top of [virtuoso-bridge-lite](https://github.com/Arcadia-1/virtuoso-bridge-lite).
+A lightweight automation toolkit for Cadence Virtuoso. Currently focused on
+standard-cell place and route: it reads schematic data directly from a running
+Virtuoso session, runs placement and routing, and writes the result back as a
+Virtuoso layout — no LEF/lib/SDC required.
 
-## Clone
+The long-term goal is to integrate with LangGraph to build an AI agent that
+can drive the full custom-layout flow from a schematic.
 
-This repo uses `virtuoso-bridge-lite` as a git submodule (pinned to commit `eacf3ca`).
+## Architecture
 
-Clone with submodules in one step:
+```
+Virtuoso CIW
+     │  SKILL / virtuoso-bridge-lite
+     ▼
+Python scripts (place.py / route.py / pnr.py)
+     │  JSON over stdin/stdout
+     ├──▶ placer    (Go) — schematic-aware standard-cell placement
+     └──▶ autorouter (Go) — two-layer M2/M3 net routing
+```
+
+## Setup
+
+### 1. Clone
 
 ```bash
 git clone --recurse-submodules https://github.com/Cortalo/langgraph4virtuoso.git
 ```
 
-If you already cloned without `--recurse-submodules`, initialize the submodule afterwards:
+If you already cloned without submodules:
 
 ```bash
 git submodule update --init
-cd virtuoso-bridge-lite
-git checkout eacf3ca
-cd ..
+cd virtuoso-bridge-lite && git checkout eacf3ca && cd ..
 ```
 
-## Environment Variables
+### 2. Python environment
 
-Set these in your shell (e.g. `~/.bashrc`) before starting Virtuoso:
-
-```bash
-export RB_DAEMON_PATH=/path/to/langgraph4virtuoso/virtuoso-bridge-lite/src/virtuoso_bridge/virtuoso/basic/resources/ramic_bridge_daemon_3.py
-export RB_PYTHON_PATH=python3
-export RB_PORT=65432
-export OPENAI_API_KEY=your_key_here
-```
-
-## Python Environment
-
-Requires Python 3.11, 3.12, or 3.13. Check first:
+Requires Python 3.11, 3.12, or 3.13.
 
 ```bash
-python3 --version
-```
-
-Create a virtual environment and install dependencies:
-
-```bash
-python3 -m venv langgraph-env
-source langgraph-env/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 pip install -e virtuoso-bridge-lite
 ```
 
-## Start the Virtuoso Daemon
-
-1. Source your shell config and start Virtuoso from that shell:
-   ```bash
-   source ~/.bashrc
-   # then launch Virtuoso
-   ```
-
-2. In the Virtuoso CIW, load the bridge:
-   ```
-   load("/abs/path/to/langgraph4virtuoso/virtuoso-bridge-lite/src/virtuoso_bridge/virtuoso/basic/resources/ramic_bridge.il")
-   ```
-   You should see:
-   ```
-   [RAMIC Bridge ipc=...] ready: bind=0.0.0.0:65432
-   ```
-
-3. The daemon stays alive as long as Virtuoso is running and exits automatically when Virtuoso exits.
-
-To stop the daemon manually from CIW:
-```
-RBStop()
-```
-
-## Run Examples
-
-> **⚠️ WARNING — Demo only.**
-> This project is under active development and is not production-ready.
-> Do **not** run these scripts on real projects. They may overwrite, corrupt,
-> or permanently delete your Virtuoso cells and layout data.
+### 3. Environment variables
 
 ```bash
-source langgraph-env/bin/activate
-python hello_virtuoso.py
-python example/agent_place_demo.py
-python example/agent_place_demo.py --debug
+export RB_DAEMON_PATH=/path/to/VirtuosoKit/virtuoso-bridge-lite/src/virtuoso_bridge/virtuoso/basic/resources/ramic_bridge_daemon_3.py
+export RB_PYTHON_PATH=python3
+export RB_PORT=65432
 ```
 
-## Placer
+### 4. Start the Virtuoso bridge
 
-A standard-cell placer (Go) that reads schematic instance positions from
-Virtuoso and creates a placed layout.
+In the Virtuoso CIW:
 
-Build the binary first:
+```
+load("/abs/path/to/VirtuosoKit/virtuoso-bridge-lite/src/virtuoso_bridge/virtuoso/basic/resources/ramic_bridge.il")
+```
+
+You should see:
+```
+[RAMIC Bridge ipc=...] ready: bind=0.0.0.0:65432
+```
+
+## Build
 
 ```bash
-cd placer
-go build -o bin/placer ./cmd/placer/
+cd placer && go build -o bin/placer ./cmd/placer/ && cd ..
+cd autorouter && go build -o bin/autorouter ./cmd/autorouter/ && cd ..
 ```
 
-Place a cell:
+## Usage
+
+### Place
 
 ```bash
 python place.py test pfd_mini_delay_1 --ignore-lib basic --row-height 3920
 ```
 
-Key options: `--row-height` (nm, default 3920), `--pr-margin` (nm, default 10000).
+Key options: `--row-height` (nm, default 3920), `--pr-margin` (nm, default 10000),
+`--target-width` (nm, splits and repacks rows to fit; 0 disables).
 
-## Autorouter
-
-A two-layer M2/M3 autorouter (Go) that reads layout and schematic data from
-Virtuoso, routes nets, draws the result back into the layout, and creates
-proper layout pins on M1 for each schematic port.
-
-Build the binary first:
-
-```bash
-cd autorouter
-go build -o bin/autorouter ./cmd/autorouter/
-```
-
-Route a cell:
+### Route
 
 ```bash
 python route.py test pfd_mini_delay_1 \
@@ -130,12 +94,10 @@ python route.py test pfd_mini_delay_1 \
     --ignore-lib basic
 ```
 
-See [`autorouter/README.md`](autorouter/README.md) for full configuration,
-DRC setup (`drcs.toml`, `pins.toml`), the JSON API, and architecture details.
+See [`autorouter/README.md`](autorouter/README.md) for DRC configuration
+(`drcs.toml`, `pins.toml`) and the full JSON API.
 
-## PnR (Place and Route)
-
-Run placement and routing in one step:
+### Place and Route in one step
 
 ```bash
 python pnr.py test pfd_mini_delay_1 \
@@ -145,8 +107,7 @@ python pnr.py test pfd_mini_delay_1 \
     --row-height 3920
 ```
 
-`pnr.py` places the cell, routes it, removes the prBoundary helper shape, and
-optionally opens the Calibre DRC/LVS GUI:
+With Calibre DRC/LVS:
 
 ```bash
 python pnr.py test pfd_mini_delay_1 \
@@ -156,5 +117,3 @@ python pnr.py test pfd_mini_delay_1 \
     --row-height 3920 \
     --drc --lvs
 ```
-
-Build both binaries before running.
