@@ -1,0 +1,117 @@
+{
+  "instances": [
+    {
+      "name": "I0<14:0>",
+      "lib": "tcb018gbwp7t"
+    },
+    {
+      "name": "I1<3:0>",
+      "lib": "tcb018gbwp7t"
+    },
+    {
+      "name": "I5",
+      "lib": "tcb018gbwp7t"
+    },
+    {
+      "name": "I6",
+      "lib": "tcb018gbwp7t"
+    }
+  ],
+  "nets": {
+    "<*4>VSS": [
+      "I1<3:0>.VSS"
+    ],
+    "VSS": [
+      "I6.VSS",
+      "I5.VSS"
+    ],
+    "VDD": [
+      "I6.VDD",
+      "I5.VDD"
+    ],
+    "PH<14:0>": [
+      "I0<14:0>.A2"
+    ],
+    "ANDOUT<14:0>": [
+      "I0<14:0>.Z"
+    ],
+    "<*15>VDD": [
+      "I0<14:0>.VDD"
+    ],
+    "<*15>VSS": [
+      "I0<14:0>.VSS"
+    ],
+    "OROUT<3:0>": [
+      "I1<3:0>.Z"
+    ],
+    "SEL<14:0>": [
+      "I0<14:0>.A1"
+    ],
+    "PH<0>": [
+      "I6.I0"
+    ],
+    "ANDOUT<2:0>,VSS": [
+      "I1<3:0>.A4"
+    ],
+    "<*4>VDD": [
+      "I1<3:0>.VDD"
+    ],
+    "ANDOUT<10:7>": [
+      "I1<3:0>.A2"
+    ],
+    "ANDOUT<6:3>": [
+      "I1<3:0>.A3"
+    ],
+    "ANDOUT<14:11>": [
+      "I1<3:0>.A1"
+    ],
+    "OUT_INT": [
+      "I5.Z",
+      "I6.I1"
+    ],
+    "OROUT<3>": [
+      "I5.A1"
+    ],
+    "OROUT<2>": [
+      "I5.A2"
+    ],
+    "OROUT<1>": [
+      "I5.A3"
+    ],
+    "OROUT<0>": [
+      "I5.A4"
+    ],
+    "OUT": [
+      "I6.Z"
+    ],
+    "EN": [
+      "I6.S"
+    ]
+  },
+  "pins": {
+    "VDD": {
+      "direction": "inputOutput",
+      "numBits": 1
+    },
+    "VSS": {
+      "direction": "inputOutput",
+      "numBits": 1
+    },
+    "OUT": {
+      "direction": "output",
+      "numBits": 1
+    },
+    "SEL<14:0>": {
+      "direction": "input",
+      "numBits": 15
+    },
+    "PH<14:0>": {
+      "direction": "input",
+      "numBits": 15
+    },
+    "EN": {
+      "direction": "input",
+      "numBits": 1
+    }
+  }
+}

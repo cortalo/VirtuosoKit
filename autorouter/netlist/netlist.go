@@ -7,9 +7,108 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
+
+var busRangeRE = regexp.MustCompile(`^(.*)<(\d+):(\d+)>$`)
+var repeatRE = regexp.MustCompile(`^<\*(\d+)>(.+)$`)
+
+// expandBusName expands "NAME<high:low>" into individual bit names.
+// Returns a single-element slice if no bus syntax is present.
+func expandBusName(name string) []string {
+	m := busRangeRE.FindStringSubmatch(name)
+	if m == nil {
+		return []string{name}
+	}
+	base := m[1]
+	high, _ := strconv.Atoi(m[2])
+	low, _ := strconv.Atoi(m[3])
+	var result []string
+	if high >= low {
+		for i := high; i >= low; i-- {
+			result = append(result, fmt.Sprintf("%s<%d>", base, i))
+		}
+	} else {
+		for i := high; i <= low; i++ {
+			result = append(result, fmt.Sprintf("%s<%d>", base, i))
+		}
+	}
+	return result
+}
+
+// expandNetKey expands a net key into individual net names, handling:
+//   - "<*N>NAME"    → NAME repeated N times
+//   - "A<h:l>,B"   → per-bit names for A, then B (comma-separated, each may be a bus)
+func expandNetKey(key string) []string {
+	if m := repeatRE.FindStringSubmatch(key); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		name := m[2]
+		result := make([]string, n)
+		for i := range result {
+			result[i] = name
+		}
+		return result
+	}
+	parts := strings.Split(key, ",")
+	var result []string
+	for _, p := range parts {
+		result = append(result, expandBusName(strings.TrimSpace(p))...)
+	}
+	return result
+}
+
+// expandInstPin expands "INST<h:l>.PIN" into individual inst.pin strings.
+func expandInstPin(instPin string) []string {
+	dot := strings.LastIndex(instPin, ".")
+	if dot < 0 {
+		return []string{instPin}
+	}
+	insts := expandBusName(instPin[:dot])
+	pin := instPin[dot:]
+	result := make([]string, len(insts))
+	for i, inst := range insts {
+		result[i] = inst + pin
+	}
+	return result
+}
+
+// expandNets flattens bus-notation net entries into a plain net→instPins map.
+// A scalar net key (1 name) may connect to multiple inst.pins (all appended to
+// that one net). A bus key (N>1 names) must match 1:1 with the expanded inst.pins.
+func expandNets(raw map[string][]string) (map[string][]string, error) {
+	result := make(map[string][]string)
+	for key, instPins := range raw {
+		netNames := expandNetKey(key)
+		var expanded []string
+		for _, ip := range instPins {
+			expanded = append(expanded, expandInstPin(ip)...)
+		}
+		if len(netNames) == 1 {
+			result[netNames[0]] = append(result[netNames[0]], expanded...)
+		} else if len(netNames) == len(expanded) {
+			for i, name := range netNames {
+				result[name] = append(result[name], expanded[i])
+			}
+		} else {
+			return nil, fmt.Errorf("netlist: net %q: %d net names vs %d inst.pins", key, len(netNames), len(expanded))
+		}
+	}
+	return result, nil
+}
+
+// expandSchematicInstances flattens bus instance names into individual instances.
+func expandSchematicInstances(instances []SchematicInstance) []SchematicInstance {
+	var result []SchematicInstance
+	for _, inst := range instances {
+		for _, name := range expandBusName(inst.Name) {
+			result = append(result, SchematicInstance{Name: name, Lib: inst.Lib})
+		}
+	}
+	return result
+}
 
 type PinDB interface {
 	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, err error)
@@ -114,8 +213,15 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		ignoredLibs[l] = struct{}{}
 	}
 
-	schemLib := make(map[string]string, len(schematic.Instances))
-	for _, inst := range schematic.Instances {
+	expandedInsts := expandSchematicInstances(schematic.Instances)
+	expandedNetsMap, expErr := expandNets(schematic.Nets)
+	if expErr != nil {
+		err = expErr
+		return
+	}
+
+	schemLib := make(map[string]string, len(expandedInsts))
+	for _, inst := range expandedInsts {
 		schemLib[inst.Name] = inst.Lib
 	}
 
@@ -124,8 +230,8 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		instByName[inst.Name] = inst
 	}
 
-	netNames := make([]string, 0, len(schematic.Nets))
-	for name := range schematic.Nets {
+	netNames := make([]string, 0, len(expandedNetsMap))
+	for name := range expandedNetsMap {
 		netNames = append(netNames, name)
 	}
 	sort.Strings(netNames)
@@ -135,7 +241,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		if _, skip := ignoredNets[name]; skip {
 			continue
 		}
-		instPins := schematic.Nets[name]
+		instPins := expandedNetsMap[name]
 
 		var pins []common.RoutingPin
 		for _, instPin := range instPins {
@@ -182,46 +288,48 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		})
 	}
 
-	pinNames := make([]string, 0, len(schematic.Pins))
+	rawPinNames := make([]string, 0, len(schematic.Pins))
 	for name := range schematic.Pins {
-		pinNames = append(pinNames, name)
+		rawPinNames = append(rawPinNames, name)
 	}
-	sort.Strings(pinNames)
+	sort.Strings(rawPinNames)
 
 	var layoutPins []*common.RoutingPin
-	for _, name := range pinNames {
-		if _, skip := ignoredNets[name]; skip {
-			continue
+	for _, rawName := range rawPinNames {
+		for _, name := range expandNetKey(rawName) {
+			if _, skip := ignoredNets[name]; skip {
+				continue
+			}
+			instPinList, ok := expandedNetsMap[name]
+			if !ok || len(instPinList) == 0 {
+				continue
+			}
+			parts := strings.SplitN(instPinList[0], ".", 2)
+			if len(parts) != 2 {
+				err = fmt.Errorf("netlist: invalid inst.pin %q in pin %q", instPinList[0], name)
+				return
+			}
+			inst, ok := instByName[parts[0]]
+			if !ok {
+				err = fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
+				return
+			}
+			xLow, xHigh, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			if qerr != nil {
+				err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
+				return
+			}
+			instX := int(math.Round(inst.XY[0] * 1000))
+			instY := int(math.Round(inst.XY[1] * 1000))
+			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
+			layoutPins = append(layoutPins, &common.RoutingPin{
+				Name:  name,
+				XLow:  instX + txLow,
+				XHigh: instX + txHigh,
+				YLow:  instY + tyLow,
+				YHigh: instY + tyHigh,
+			})
 		}
-		instPinList, ok := schematic.Nets[name]
-		if !ok || len(instPinList) == 0 {
-			continue
-		}
-		parts := strings.SplitN(instPinList[0], ".", 2)
-		if len(parts) != 2 {
-			err = fmt.Errorf("netlist: invalid inst.pin %q in pin %q", instPinList[0], name)
-			return
-		}
-		inst, ok := instByName[parts[0]]
-		if !ok {
-			err = fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
-			return
-		}
-		xLow, xHigh, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
-		if qerr != nil {
-			err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
-			return
-		}
-		instX := int(math.Round(inst.XY[0] * 1000))
-		instY := int(math.Round(inst.XY[1] * 1000))
-		txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
-		layoutPins = append(layoutPins, &common.RoutingPin{
-			Name:  name,
-			XLow:  instX + txLow,
-			XHigh: instX + txHigh,
-			YLow:  instY + tyLow,
-			YHigh: instY + tyHigh,
-		})
 	}
 
 	nl = &common.Netlist{Nets: nets, Pins: layoutPins}
