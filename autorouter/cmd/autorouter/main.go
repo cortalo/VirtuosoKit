@@ -159,7 +159,7 @@ func main() {
 			}
 			ok++
 			fmt.Fprintf(os.Stderr, "  net %d:\n", r.NetID)
-			for _, seg := range r.Segments {
+			for _, seg := range r.Shapes {
 				fmt.Fprintf(os.Stderr, "    seg  layer=%v ll=%v ur=%v\n", seg.Layer, seg.LowerLeft, seg.UpperRight)
 			}
 		}

@@ -38,6 +38,29 @@ func pins(coords ...[2]int) []common.RoutingPin {
 	return ps
 }
 
+// m3Track finds the M3 segment in segs and returns its track ID (LowerLeft.Y / tw).
+// Returns -1 when no M3 segment is present (M2-only routing case).
+func m3Track(segs []common.Segment, tw int) int {
+	for _, s := range segs {
+		if s.Layer == common.M3 {
+			return s.LowerLeft.Y / tw
+		}
+	}
+	return -1
+}
+
+// occupyM3Track marks a single M3 track on the canvas as occupied.
+func occupyM3Track(c *canvas.Canvas, trackID, start, end, netID, tw int) error {
+	return c.Occupy(common.Segment{
+		LowerLeft:    common.Point{X: start, Y: trackID * tw},
+		UpperRight:   common.Point{X: end, Y: (trackID + 1) * tw},
+		NetID:        netID,
+		Layer:        common.M3,
+		CanvasOrigin: common.Point{X: 0, Y: 0},
+		Dir:          common.Horizontal,
+	})
+}
+
 // --- basic routing ---
 
 func TestRoute_ClearCanvas_FindsMidTrack(t *testing.T) {
@@ -46,10 +69,10 @@ func TestRoute_ClearCanvas_FindsMidTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, m3.TrackID)
+	assert.Equal(t, 5, m3Track(segs, 100))
 }
 
 func TestRoute_SameY_FindsMidTrack(t *testing.T) {
@@ -57,20 +80,20 @@ func TestRoute_SameY_FindsMidTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 200}, [2]int{900, 200}), 1)
+	segs, err := r.Route(pins([2]int{100, 200}, [2]int{900, 200}), 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 2, m3.TrackID)
+	assert.Equal(t, 2, m3Track(segs, 100))
 }
 
 func TestRoute_OutOfBounds_ReturnsError(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	r := newRouter(c)
 
-	_, _, err := r.Route(pins([2]int{-1, 0}, [2]int{900, 900}), 1)
+	_, err := r.Route(pins([2]int{-1, 0}, [2]int{900, 900}), 1)
 	assert.ErrorIs(t, err, router.ErrOutOfBound)
 
-	_, _, err = r.Route(pins([2]int{100, 100}, [2]int{1001, 900}), 1)
+	_, err = r.Route(pins([2]int{100, 100}, [2]int{1001, 900}), 1)
 	assert.ErrorIs(t, err, router.ErrOutOfBound)
 }
 
@@ -78,69 +101,70 @@ func TestRoute_OutOfBounds_ReturnsError(t *testing.T) {
 
 func TestRoute_MidTrackM3Blocked_FallsBackToNeighbor(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
-	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 99}))
+	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 99, 100))
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
 	// spacing rule: must be at least 2 tracks away from blocked track 5
-	assert.True(t, m3.TrackID == 3 || m3.TrackID == 7)
+	trackID := m3Track(segs, 100)
+	assert.True(t, trackID == 3 || trackID == 7)
 }
 
 func TestRoute_M2FromBlocked_SkipsTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	// block M2 at from.X=100, overlapping track 5's Y range [500,600]
-	require.NoError(t, c.OccupyM2(common.Segment{
+	require.NoError(t, c.Occupy(common.Segment{Layer: common.M2,
 		LowerLeft:  common.Point{X: 100, Y: 500},
 		UpperRight: common.Point{X: 101, Y: 600},
 		NetID:      99,
 	}))
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
-	assert.NotEqual(t, 5, m3.TrackID)
+	assert.NotEqual(t, 5, m3Track(segs, 100))
 }
 
 func TestRoute_M2ToBlocked_SkipsTrack(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	// block M2 at to.X=900, overlapping track 5's Y range [500,600]
-	require.NoError(t, c.OccupyM2(common.Segment{
+	require.NoError(t, c.Occupy(common.Segment{Layer: common.M2,
 		LowerLeft:  common.Point{X: 900, Y: 500},
 		UpperRight: common.Point{X: 901, Y: 600},
 		NetID:      99,
 	}))
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
-	assert.NotEqual(t, 5, m3.TrackID)
+	assert.NotEqual(t, 5, m3Track(segs, 100))
 }
 
 func TestRoute_AllTracksBlocked_ReturnsError(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	for i := 0; i < 10; i++ {
-		require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: i, Start: 0, End: 1000, NetID: 99}))
+		require.NoError(t, occupyM3Track(c, i, 0, 1000, 99, 100))
 	}
 	r := newRouter(c)
 
-	_, _, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	_, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	assert.ErrorIs(t, err, router.ErrNoPath)
 }
 
 func TestRoute_SameNetID_IgnoresOwnBlocks(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
-	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 1}))
+	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 1, 100))
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 5, m3.TrackID)
+	assert.Equal(t, 5, m3Track(segs, 100))
 }
 
 // --- delta expansion ---
@@ -149,14 +173,14 @@ func TestRoute_MidTrackBlocked_ExpandsSymmetrically(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	// block tracks 5 and 6; spacing rule means 4 is also excluded (adjacent to 5)
 	// and 7 is excluded (adjacent to 6), so the first valid track is 3
-	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 5, Start: 0, End: 1000, NetID: 99}))
-	require.NoError(t, c.OccupyM3(common.TrackSegment{TrackID: 6, Start: 0, End: 1000, NetID: 99}))
+	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 99, 100))
+	require.NoError(t, occupyM3Track(c, 6, 0, 1000, 99, 100))
 	r := newRouter(c)
 
-	_, m3, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 3, m3.TrackID)
+	assert.Equal(t, 3, m3Track(segs, 100))
 }
 
 func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
@@ -165,21 +189,17 @@ func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
 	r := newRouter(c)
 
 	// route net1
-	_, m3_1, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+	segs1, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
 	require.NoError(t, err)
+	trackID1 := m3Track(segs1, 100)
 
 	// mark net1 as occupied
-	require.NoError(t, c.OccupyM3(common.TrackSegment{
-		TrackID: m3_1.TrackID,
-		Start:   100,
-		End:     900,
-		NetID:   1,
-	}))
+	require.NoError(t, occupyM3Track(c, trackID1, 100, 900, 1, 100))
 
 	// route net2 with same endpoints, should find different track
-	_, m3_2, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 2)
+	segs2, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 2)
 	require.NoError(t, err)
-	assert.NotEqual(t, m3_1.TrackID, m3_2.TrackID)
+	assert.NotEqual(t, trackID1, m3Track(segs2, 100))
 }
 
 // --- M2-only fallback ---
@@ -200,20 +220,20 @@ func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
 		{XLow: 100, YLow: 400, YHigh: 500},
 	}
 
-	m2Segs, m3, err := r.Route(ps, 1)
+	segs, err := r.Route(ps, 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, -1, m3.TrackID, "M2-only sentinel")
-	require.Len(t, m2Segs, 3, "2 per-pin stubs + 1 m2Horiz")
+	assert.Equal(t, -1, m3Track(segs, 100), "M2-only sentinel")
+	require.Len(t, segs, 3, "2 per-pin stubs + 1 m2Horiz")
 
 	for i := 0; i < 2; i++ {
-		assert.Equal(t, 100, m2Segs[i].LowerLeft.X, "stub[%d] XLow", i)
-		assert.Equal(t, 101, m2Segs[i].UpperRight.X, "stub[%d] XHigh", i)
-		assert.Equal(t, 400, m2Segs[i].LowerLeft.Y, "stub[%d] YLow", i)
-		assert.Equal(t, 500, m2Segs[i].UpperRight.Y, "stub[%d] YHigh", i)
+		assert.Equal(t, 100, segs[i].LowerLeft.X, "stub[%d] XLow", i)
+		assert.Equal(t, 101, segs[i].UpperRight.X, "stub[%d] XHigh", i)
+		assert.Equal(t, 400, segs[i].LowerLeft.Y, "stub[%d] YLow", i)
+		assert.Equal(t, 500, segs[i].UpperRight.Y, "stub[%d] YHigh", i)
 	}
 
-	m2Horiz := m2Segs[2]
+	m2Horiz := segs[2]
 	assert.Equal(t, 100, m2Horiz.LowerLeft.X)
 	assert.Equal(t, 101, m2Horiz.UpperRight.X)
 	assert.Equal(t, 400, m2Horiz.LowerLeft.Y)

@@ -8,6 +8,7 @@ import (
 )
 
 type Point = common.Point
+type Shape = common.Shape
 type Segment = common.Segment
 type TrackSegment = common.TrackSegment
 type RoutingPin = common.RoutingPin
@@ -17,14 +18,11 @@ type ViaConfig = common.ViaConfig
 type DRCSpec = common.DRCSpec
 
 type Canvas interface {
-	OccupyM2(seg Segment) error
-	OccupyM3(seg TrackSegment) error
-	GetLowerLeft() Point
-	GetM3TrackWidth() int
+	Occupy(seg Segment) error
 }
 
 type Router interface {
-	Route(pins []RoutingPin, netID int) ([]Segment, TrackSegment, error)
+	Route(pins []RoutingPin, netID int) ([]Segment, error)
 }
 
 type Session struct {
@@ -50,20 +48,20 @@ func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 Via
 }
 
 type NetResult struct {
-	NetID    int       `json:"net_id"`
-	NetName  string    `json:"net_name,omitempty"`
-	Segments []Segment `json:"segments"`
-	Err      error     `json:"-"`
+	NetID   int     `json:"net_id"`
+	NetName string  `json:"net_name,omitempty"`
+	Shapes  []Shape `json:"shapes"`
+	Err     error   `json:"-"`
 }
 
 func (r NetResult) MarshalJSON() ([]byte, error) {
 	type wire struct {
-		NetID    int       `json:"net_id"`
-		NetName  string    `json:"net_name,omitempty"`
-		Segments []Segment `json:"segments,omitempty"`
-		Error    string    `json:"error,omitempty"`
+		NetID   int     `json:"net_id"`
+		NetName string  `json:"net_name,omitempty"`
+		Shapes  []Shape `json:"shapes,omitempty"`
+		Error   string  `json:"error,omitempty"`
 	}
-	w := wire{NetID: r.NetID, NetName: r.NetName, Segments: r.Segments}
+	w := wire{NetID: r.NetID, NetName: r.NetName, Shapes: r.Shapes}
 	if r.Err != nil {
 		w.Error = r.Err.Error()
 	}
@@ -72,74 +70,71 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.netlist.Nets))
-	m2ViaEnc := s.m2DRC.ViaEnclosure()
-	via23ViaEnc := max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure())
 
 	for i, net := range s.netlist.Nets {
-		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
+		// The first len(net.Pins) segments connect each pin's M1 bbox to M2.
+		segs, err := s.router.Route(net.Pins, net.ID)
 		if err != nil {
 			results[i] = NetResult{NetID: net.ID, NetName: net.Name, Err: err}
 			continue
 		}
-
-		ll := s.canvas.GetLowerLeft()
-		tw := s.canvas.GetM3TrackWidth()
-		m3Seg := Segment{
-			LowerLeft:  Point{X: m3.Start, Y: ll.Y + m3.TrackID*tw},
-			UpperRight: Point{X: m3.End, Y: ll.Y + (m3.TrackID+1)*tw},
-			NetID:      m3.NetID,
-			Layer:      common.M3,
+		for _, seg := range segs {
+			lo.Must0(s.canvas.Occupy(seg))
 		}
+		shapes := lo.Map(segs, func(seg Segment, _ int) Shape { return seg.ToShape() })
+		N := len(shapes)
 
-		segs := make([]Segment, 0, len(m2Segs))
-		segs = append(segs, m2Segs...)
 		for j, pin := range net.Pins {
-			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12, m2ViaEnc)
+			shapes = s.appendViaCuts(shapes, shapes[j], pinBBox(pin))
 		}
-		if m3.Start != m3.End {
-			segs = append(segs, m3Seg)
-			for j := range net.Pins {
-				segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23ViaEnc)
+		for ii := range N {
+			for jj := ii + 1; jj < N; jj++ {
+				shapes = s.appendViaCuts(shapes, shapes[ii], shapes[jj])
 			}
 		}
 
-		results[i] = NetResult{NetID: net.ID, NetName: net.Name, Segments: segs}
-
-		for _, m2 := range m2Segs {
-			lo.Must0(s.canvas.OccupyM2(m2))
-		}
-		if m3.Start != m3.End {
-			lo.Must0(s.canvas.OccupyM3(m3))
-		}
+		results[i] = NetResult{NetID: net.ID, NetName: net.Name, Shapes: shapes}
 	}
-	pinSegs := make([]Segment, 0, len(s.netlist.Pins))
-	for _, pin := range s.netlist.Pins {
-		pinSegs = append(pinSegs, Segment{
+	pinShapes := lo.Map(s.netlist.Pins, func(pin *RoutingPin, _ int) Shape {
+		return Shape{
 			LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 			UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
 			Layer:      common.M1,
-			Name:       pin.Name,
 			Purpose:    common.Pin,
-		})
-	}
-	if len(pinSegs) > 0 {
-		results = append(results, NetResult{Segments: pinSegs})
+		}
+	})
+	if len(pinShapes) > 0 {
+		results = append(results, NetResult{Shapes: pinShapes})
 	}
 	return results
 }
 
-// appendViaCuts places via cuts in a grid within the overlap of segments a and b,
-// inset by endExt on all sides to satisfy end-extension DRC constraints.
-func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Layer, endExt int) []Segment {
+// appendViaCuts detects the via type from a.Layer/b.Layer and places via cuts
+// in the overlap region. Unrecognised layer combinations are a no-op.
+func (s *Session) appendViaCuts(shapes []Shape, a, b Shape) []Shape {
+	var vc ViaConfig
+	var layer common.Layer
+	var endExt int
+
+	la, lb := a.Layer, b.Layer
+	switch {
+	case (la == common.M1 && lb == common.M2) || (la == common.M2 && lb == common.M1):
+		vc, layer, endExt = s.via12, common.Via12, s.m2DRC.ViaEnclosure()
+	case (la == common.M2 && lb == common.M3) || (la == common.M3 && lb == common.M2):
+		vc, layer, endExt = s.via23, common.Via23, max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure())
+	default:
+		return shapes
+	}
+
 	if vc.CutW == 0 || vc.CutH == 0 {
-		return segs
+		return shapes
 	}
 	x0 := max(a.LowerLeft.X, b.LowerLeft.X) + endExt
 	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y) + endExt
 	x1 := min(a.UpperRight.X, b.UpperRight.X) - endExt
 	y1 := min(a.UpperRight.Y, b.UpperRight.Y) - endExt
 	if x0 >= x1 || y0 >= y1 {
-		return segs
+		return shapes
 	}
 	w, h := x1-x0, y1-y0
 	cols := max(1, (w+vc.SpaceX)/(vc.CutW+vc.SpaceX))
@@ -150,7 +145,7 @@ func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Laye
 		for c := 0; c < cols; c++ {
 			llx := startX + c*(vc.CutW+vc.SpaceX)
 			lly := startY + r*(vc.CutH+vc.SpaceY)
-			segs = append(segs, Segment{
+			shapes = append(shapes, Shape{
 				LowerLeft:  Point{X: llx, Y: lly},
 				UpperRight: Point{X: llx + vc.CutW, Y: lly + vc.CutH},
 				Layer:      layer,
@@ -158,12 +153,13 @@ func appendViaCuts(segs []Segment, vc ViaConfig, a, b Segment, layer common.Laye
 			})
 		}
 	}
-	return segs
+	return shapes
 }
 
-func pinBBox(pin RoutingPin) Segment {
-	return Segment{
+func pinBBox(pin RoutingPin) Shape {
+	return Shape{
 		LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 		UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
+		Layer:      common.M1,
 	}
 }

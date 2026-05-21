@@ -12,9 +12,8 @@ import (
 // --- mocks ---
 
 type routeResult struct {
-	m2Segs []Segment
-	m3     TrackSegment
-	err    error
+	segs []Segment
+	err  error
 }
 
 type mockRouter struct {
@@ -22,24 +21,18 @@ type mockRouter struct {
 	calls   int
 }
 
-func (m *mockRouter) Route(pins []RoutingPin, netID int) ([]Segment, TrackSegment, error) {
+func (m *mockRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
 	r := m.results[m.calls]
 	m.calls++
-	return r.m2Segs, r.m3, r.err
+	return r.segs, r.err
 }
 
 type mockCanvas struct {
-	m2Calls []Segment
-	m3Calls []TrackSegment
+	occupyCalls []Segment
 }
 
-func (m *mockCanvas) OccupyM2(seg Segment) error {
-	m.m2Calls = append(m.m2Calls, seg)
-	return nil
-}
-
-func (m *mockCanvas) OccupyM3(seg TrackSegment) error {
-	m.m3Calls = append(m.m3Calls, seg)
+func (m *mockCanvas) Occupy(seg Segment) error {
+	m.occupyCalls = append(m.occupyCalls, seg)
 	return nil
 }
 
@@ -62,33 +55,30 @@ func netlist(nets ...*Net) *Netlist {
 	return &Netlist{Nets: nets}
 }
 
+// seg creates an M2 segment for use in mock router results.
 func seg(x0, y0, x1, y1, netID int) Segment {
 	return Segment{LowerLeft: Point{X: x0, Y: y0}, UpperRight: Point{X: x1, Y: y1}, NetID: netID, Layer: common.M2}
 }
 
-func track(trackID, start, end, netID int) TrackSegment {
-	return TrackSegment{TrackID: trackID, Start: start, End: end, NetID: netID}
-}
-
-// expectedM3Seg converts a TrackSegment to the Segment the session will produce
-// using the mockCanvas geometry (LowerLeft={0,0}, trackWidth=100).
-func expectedM3Seg(ts TrackSegment) Segment {
+// m3Seg creates an M3 segment from a track ID using the mock canvas geometry
+// (LowerLeft={0,0}, trackWidth=100).
+func m3Seg(trackID, start, end, netID int) Segment {
 	return Segment{
-		LowerLeft:  Point{X: ts.Start, Y: ts.TrackID * 100},
-		UpperRight: Point{X: ts.End, Y: (ts.TrackID + 1) * 100},
-		NetID:      ts.NetID,
+		LowerLeft:  Point{X: start, Y: trackID * 100},
+		UpperRight: Point{X: end, Y: (trackID + 1) * 100},
 		Layer:      common.M3,
+		NetID:      netID,
 	}
 }
 
-// m3FromResult finds the M3 segment in a NetResult by layer.
-func m3FromResult(res NetResult) Segment {
-	for _, s := range res.Segments {
+// m3FromResult finds the M3 shape in a NetResult by layer.
+func m3FromResult(res NetResult) common.Shape {
+	for _, s := range res.Shapes {
 		if s.Layer == common.M3 {
 			return s
 		}
 	}
-	panic("no M3 segment")
+	panic("no M3 shape")
 }
 
 // --- tests ---
@@ -102,9 +92,9 @@ func TestRoute_EmptyNets_ReturnsEmptyResults(t *testing.T) {
 func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 	m2From := seg(0, 100, 10, 200, 1)
 	m2To := seg(90, 100, 100, 200, 1)
-	m3 := track(5, 0, 100, 1)
+	m3 := m3Seg(5, 0, 100, 1)
 
-	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
+	router := &mockRouter{results: []routeResult{{segs: []Segment{m2From, m2To, m3}}}}
 	canvas := &mockCanvas{}
 	s := &Session{canvas: canvas, router: router, netlist: netlist(makeNet(1, 0, 100, 100, 100)), m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
@@ -112,33 +102,23 @@ func TestRoute_SingleNet_Success_ReturnsCorrectResult(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.NoError(t, results[0].Err)
-
-	wantM2From := m2From
-	wantM2From.Layer = common.M2
-	wantM2To := m2To
-	wantM2To.Layer = common.M2
-	assert.Equal(t, wantM2From, results[0].Segments[0])
-	assert.Equal(t, wantM2To, results[0].Segments[1])
-	assert.Equal(t, expectedM3Seg(m3), m3FromResult(results[0]))
+	assert.Equal(t, m2From.ToShape(), results[0].Shapes[0])
+	assert.Equal(t, m2To.ToShape(), results[0].Shapes[1])
+	assert.Equal(t, m3.ToShape(), m3FromResult(results[0]))
 }
 
 func TestRoute_SingleNet_Success_OccupiesCanvas(t *testing.T) {
 	m2From := seg(0, 100, 10, 200, 1)
 	m2To := seg(90, 100, 100, 200, 1)
-	m3 := track(5, 0, 100, 1)
+	m3 := m3Seg(5, 0, 100, 1)
 
-	router := &mockRouter{results: []routeResult{{m2Segs: []Segment{m2From, m2To}, m3: m3}}}
+	router := &mockRouter{results: []routeResult{{segs: []Segment{m2From, m2To, m3}}}}
 	canvas := &mockCanvas{}
 	s := &Session{canvas: canvas, router: router, netlist: netlist(makeNet(1, 0, 100, 100, 100)), m2DRC: common.NoDRC{}, m3DRC: common.NoDRC{}}
 
 	s.Route()
 
-	wantM2From := m2From
-	wantM2From.Layer = common.M2
-	wantM2To := m2To
-	wantM2To.Layer = common.M2
-	assert.Equal(t, []Segment{wantM2From, wantM2To}, canvas.m2Calls)
-	assert.Equal(t, []TrackSegment{m3}, canvas.m3Calls)
+	assert.Equal(t, []Segment{m2From, m2To, m3}, canvas.occupyCalls) // canvas still receives Segment
 }
 
 func TestRoute_SingleNet_RouteError_SkipsOccupy(t *testing.T) {
@@ -151,13 +131,12 @@ func TestRoute_SingleNet_RouteError_SkipsOccupy(t *testing.T) {
 
 	require.Len(t, results, 1)
 	assert.ErrorIs(t, results[0].Err, routeErr)
-	assert.Empty(t, canvas.m2Calls)
-	assert.Empty(t, canvas.m3Calls)
+	assert.Empty(t, canvas.occupyCalls)
 }
 
 func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
-	r1 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1)}, m3: track(3, 0, 100, 1)}
-	r2 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 200, 2), seg(90, 0, 100, 200, 2)}, m3: track(7, 0, 100, 2)}
+	r1 := routeResult{segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1), m3Seg(3, 0, 100, 1)}}
+	r2 := routeResult{segs: []Segment{seg(0, 0, 10, 200, 2), seg(90, 0, 100, 200, 2), m3Seg(7, 0, 100, 2)}}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
@@ -175,14 +154,13 @@ func TestRoute_MultipleNets_AllSucceed_OccupiesAll(t *testing.T) {
 	assert.NoError(t, results[0].Err)
 	assert.NoError(t, results[1].Err)
 
-	wantM2Calls := append(r1.m2Segs, r2.m2Segs...)
-	assert.Equal(t, wantM2Calls, canvas.m2Calls)
-	assert.Equal(t, []TrackSegment{r1.m3, r2.m3}, canvas.m3Calls)
+	wantOccupyCalls := append(append([]Segment{}, r1.segs...), r2.segs...)
+	assert.Equal(t, wantOccupyCalls, canvas.occupyCalls) // canvas still receives Segment
 }
 
 func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	routeErr := errors.New("no path")
-	r1 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1)}, m3: track(3, 0, 100, 1)}
+	r1 := routeResult{segs: []Segment{seg(0, 0, 10, 100, 1), seg(90, 0, 100, 100, 1), m3Seg(3, 0, 100, 1)}}
 	r2 := routeResult{err: routeErr}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
@@ -200,19 +178,13 @@ func TestRoute_MultipleNets_PartialFailure_OnlySuccessOccupies(t *testing.T) {
 	require.Len(t, results, 2)
 	assert.NoError(t, results[0].Err)
 	assert.ErrorIs(t, results[1].Err, routeErr)
-
-	wantFrom := r1.m2Segs[0]
-	wantFrom.Layer = common.M2
-	wantTo := r1.m2Segs[1]
-	wantTo.Layer = common.M2
-	assert.Equal(t, []Segment{wantFrom, wantTo}, canvas.m2Calls)
-	assert.Equal(t, []TrackSegment{r1.m3}, canvas.m3Calls)
+	assert.Equal(t, r1.segs, canvas.occupyCalls) // canvas still receives Segment
 }
 
 func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	routeErr := errors.New("no path")
 	r1 := routeResult{err: routeErr}
-	r2 := routeResult{m2Segs: []Segment{seg(0, 0, 10, 100, 2), seg(90, 0, 100, 100, 2)}, m3: track(4, 0, 100, 2)}
+	r2 := routeResult{segs: []Segment{seg(0, 0, 10, 100, 2), seg(90, 0, 100, 100, 2), m3Seg(4, 0, 100, 2)}}
 
 	router := &mockRouter{results: []routeResult{r1, r2}}
 	canvas := &mockCanvas{}
@@ -230,8 +202,45 @@ func TestRoute_ResultsPreserveOrder(t *testing.T) {
 	assert.ErrorIs(t, results[0].Err, routeErr)
 	assert.NoError(t, results[1].Err)
 
-	wantFrom := r2.m2Segs[0]
-	wantFrom.Layer = common.M2
-	assert.Equal(t, wantFrom, results[1].Segments[0])
-	assert.Equal(t, expectedM3Seg(r2.m3), m3FromResult(results[1]))
+	assert.Equal(t, r2.segs[0].ToShape(), results[1].Shapes[0])
+	assert.Equal(t, m3Seg(4, 0, 100, 2).ToShape(), m3FromResult(results[1]))
+}
+
+func TestRoute_ViaCut_NetIDMatchesNet(t *testing.T) {
+	// M2 stub covering Y=[0,300]; pin M1 bbox Y=[100,200] overlaps → via cut generated.
+	m2 := seg(0, 0, 10, 300, 1)
+	router := &mockRouter{results: []routeResult{{segs: []Segment{m2}}}}
+	canvas := &mockCanvas{}
+	via12 := common.ViaConfig{CutW: 5, CutH: 5, SpaceX: 1, SpaceY: 1}
+
+	net := &Net{
+		ID: 1,
+		Pins: []RoutingPin{
+			{XLow: 0, XHigh: 10, YLow: 100, YHigh: 200},
+		},
+	}
+	s := &Session{
+		canvas:  canvas,
+		router:  router,
+		netlist: &Netlist{Nets: []*Net{net}},
+		via12:   via12,
+		m2DRC:   common.NoDRC{},
+		m3DRC:   common.NoDRC{},
+	}
+
+	results := s.Route()
+
+	require.Len(t, results, 1)
+	require.NoError(t, results[0].Err)
+
+	var viaCuts []Shape
+	for _, sh := range results[0].Shapes {
+		if sh.Layer == common.Via12 {
+			viaCuts = append(viaCuts, sh)
+		}
+	}
+	require.NotEmpty(t, viaCuts, "expected M1-M2 via cuts to be generated")
+	for _, via := range viaCuts {
+		assert.Equal(t, 1, via.NetID, "via cut NetID must match net ID, not 0")
+	}
 }

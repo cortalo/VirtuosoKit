@@ -25,7 +25,7 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 
 // trackIDFromResult finds the M3 segment by layer and returns its track ID.
 func trackIDFromResult(res session.NetResult, trackWidth int) int {
-	for _, seg := range res.Segments {
+	for _, seg := range res.Shapes {
 		if seg.Layer == common.M3 {
 			return seg.LowerLeft.Y / trackWidth
 		}
@@ -134,7 +134,7 @@ func TestIntegration_ThreePinNet_RouteSucceeds(t *testing.T) {
 	// 3 M2 stubs + 1 M3
 	m2Count := 0
 	m3Count := 0
-	for _, seg := range results[0].Segments {
+	for _, seg := range results[0].Shapes {
 		switch seg.Layer {
 		case common.M2:
 			m2Count++

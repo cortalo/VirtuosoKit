@@ -1,5 +1,10 @@
 package canvas
 
+type Track interface {
+	IsPassible(netID, start, end int) bool
+	Occupy(netID, start, end int) error
+}
+
 type TrackSegmentStorageImpl struct {
 	M3TrackWidth int
 	Tracks       []Track

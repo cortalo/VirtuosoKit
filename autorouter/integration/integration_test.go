@@ -74,10 +74,10 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 	require.Len(t, results, 2)
 	require.NoError(t, results[0].Err, "net2 should route without error")
 
-	segs := results[0].Segments
+	segs := results[0].Shapes
 
 	// Collect segments by layer.
-	var m2Segs, m3Segs []common.Segment
+	var m2Segs, m3Segs []common.Shape
 	for _, seg := range segs {
 		switch seg.Layer {
 		case common.M2:
@@ -93,7 +93,7 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 
 	// Find the two M2 stubs by their X position so the assertions are
 	// independent of ordering.
-	var m2ZN, m2I common.Segment
+	var m2ZN, m2I common.Shape
 	for _, seg := range m2Segs {
 		if seg.LowerLeft.X == 800 {
 			m2ZN = seg // I0.ZN (MX-transformed)

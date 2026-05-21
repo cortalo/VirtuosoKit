@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"autorouter/common"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,11 +18,20 @@ func newCanvas() *Canvas {
 }
 
 func mkSeg(x1, y1, x2, y2, netID int) Segment {
-	return Segment{LowerLeft: Point{x1, y1}, UpperRight: Point{x2, y2}, NetID: netID}
+	return Segment{LowerLeft: Point{x1, y1}, UpperRight: Point{x2, y2}, NetID: netID, Layer: common.M2}
 }
 
-func mkTrack(trackID, start, end, netID int) TrackSegment {
-	return TrackSegment{TrackID: trackID, Start: start, End: end, NetID: netID}
+// mkM3Seg builds a factory-compatible M3 Segment (Dir and CanvasOrigin set)
+// for the test canvas (LowerLeft={0,0}, trackWidth=100).
+func mkM3Seg(trackID, start, end, netID int) Segment {
+	return Segment{
+		LowerLeft:    Point{start, trackID * 100},
+		UpperRight:   Point{end, (trackID + 1) * 100},
+		Layer:        common.M3,
+		NetID:        netID,
+		CanvasOrigin: Point{0, 0},
+		Dir:          common.Horizontal,
+	}
 }
 
 // --- Inbound ---
@@ -41,87 +51,87 @@ func TestCanvas_Inbound_OutsideBounds(t *testing.T) {
 	assert.False(t, c.Inbound(Point{0, 1001}))
 }
 
-// --- IsPassibleM2 ---
+// --- IsPassible M2 ---
 
 func TestCanvas_IsPassibleM2_EmptyCanvas_Passable(t *testing.T) {
 	c := newCanvas()
-	assert.True(t, c.IsPassibleM2(mkSeg(10, 10, 20, 100, 1)))
+	assert.True(t, c.IsPassible(mkSeg(10, 10, 20, 100, 1)))
 }
 
 func TestCanvas_IsPassibleM2_AfterOccupy_NotPassable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM2(mkSeg(10, 10, 20, 100, 1)))
-	assert.False(t, c.IsPassibleM2(mkSeg(15, 10, 25, 100, 2)))
+	require.NoError(t, c.Occupy(mkSeg(10, 10, 20, 100, 1)))
+	assert.False(t, c.IsPassible(mkSeg(15, 10, 25, 100, 2)))
 }
 
 func TestCanvas_IsPassibleM2_SameNet_Passable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM2(mkSeg(10, 10, 20, 100, 1)))
-	assert.True(t, c.IsPassibleM2(mkSeg(10, 10, 20, 100, 1)))
+	require.NoError(t, c.Occupy(mkSeg(10, 10, 20, 100, 1)))
+	assert.True(t, c.IsPassible(mkSeg(10, 10, 20, 100, 1)))
 }
 
 func TestCanvas_IsPassibleM2_NonOverlapping_Passable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM2(mkSeg(10, 10, 20, 50, 1)))
-	assert.True(t, c.IsPassibleM2(mkSeg(20, 10, 30, 50, 2)))  // adjacent
-	assert.True(t, c.IsPassibleM2(mkSeg(10, 50, 20, 100, 2))) // above
+	require.NoError(t, c.Occupy(mkSeg(10, 10, 20, 50, 1)))
+	assert.True(t, c.IsPassible(mkSeg(20, 10, 30, 50, 2)))  // adjacent
+	assert.True(t, c.IsPassible(mkSeg(10, 50, 20, 100, 2))) // above
 }
 
-// --- IsPassibleM3 ---
+// --- IsPassible M3 ---
 
 func TestCanvas_IsPassibleM3_EmptyCanvas_Passable(t *testing.T) {
 	c := newCanvas()
-	assert.True(t, c.IsPassibleM3(mkTrack(0, 0, 500, 1)))
+	assert.True(t, c.IsPassible(mkM3Seg(0, 0, 500, 1)))
 }
 
 func TestCanvas_IsPassibleM3_AfterOccupy_NotPassable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM3(mkTrack(0, 100, 500, 1)))
-	assert.False(t, c.IsPassibleM3(mkTrack(0, 200, 600, 2)))
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.False(t, c.IsPassible(mkM3Seg(0, 200, 600, 2)))
 }
 
 func TestCanvas_IsPassibleM3_SameNet_Passable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM3(mkTrack(0, 100, 500, 1)))
-	assert.True(t, c.IsPassibleM3(mkTrack(0, 100, 500, 1)))
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsPassible(mkM3Seg(0, 100, 500, 1)))
 }
 
 func TestCanvas_IsPassibleM3_DifferentTrack_Passable(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM3(mkTrack(0, 100, 500, 1)))
-	assert.True(t, c.IsPassibleM3(mkTrack(1, 100, 500, 2)))
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsPassible(mkM3Seg(1, 100, 500, 2)))
 }
 
-// --- OccupyM2 ---
+// --- Occupy M2 ---
 
 func TestCanvas_OccupyM2_Basic_Succeeds(t *testing.T) {
 	c := newCanvas()
-	assert.NoError(t, c.OccupyM2(mkSeg(10, 10, 20, 100, 1)))
+	assert.NoError(t, c.Occupy(mkSeg(10, 10, 20, 100, 1)))
 }
 
 func TestCanvas_OccupyM2_Overlap_DifferentNet_ReturnsError(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM2(mkSeg(10, 10, 20, 100, 1)))
-	assert.ErrorIs(t, c.OccupyM2(mkSeg(15, 10, 25, 100, 2)), ErrOverlap)
+	require.NoError(t, c.Occupy(mkSeg(10, 10, 20, 100, 1)))
+	assert.ErrorIs(t, c.Occupy(mkSeg(15, 10, 25, 100, 2)), ErrOverlap)
 }
 
-// --- OccupyM3 ---
+// --- Occupy M3 ---
 
 func TestCanvas_OccupyM3_Basic_Succeeds(t *testing.T) {
 	c := newCanvas()
-	assert.NoError(t, c.OccupyM3(mkTrack(0, 100, 500, 1)))
+	assert.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
 }
 
-func TestCanvas_OccupyM3_InvalidTrack_ReturnsError(t *testing.T) {
+func TestCanvas_OccupyM3_OutOfRangeTrack_ReturnsInvalidTrackIDError(t *testing.T) {
 	c := newCanvas()
-	assert.ErrorIs(t, c.OccupyM3(mkTrack(-1, 0, 100, 1)), ErrInvalidTrackID)
-	assert.ErrorIs(t, c.OccupyM3(mkTrack(10, 0, 100, 1)), ErrInvalidTrackID)
+	// mkM3Seg(10,...) → TrackID=10, storage only has tracks 0-9 → ErrInvalidTrackID from storage
+	assert.ErrorIs(t, c.Occupy(mkM3Seg(10, 0, 100, 1)), ErrInvalidTrackID)
 }
 
 func TestCanvas_OccupyM3_Overlap_DifferentNet_ReturnsError(t *testing.T) {
 	c := newCanvas()
-	require.NoError(t, c.OccupyM3(mkTrack(0, 100, 500, 1)))
-	assert.ErrorIs(t, c.OccupyM3(mkTrack(0, 200, 600, 2)), ErrOverlap)
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.ErrorIs(t, c.Occupy(mkM3Seg(0, 200, 600, 2)), ErrOverlap)
 }
 
 // --- GetM3TrackWidth ---
