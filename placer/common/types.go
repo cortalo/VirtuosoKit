@@ -91,3 +91,10 @@ type TapcellConfig struct {
 	Cell       string
 	MaxSpacing int
 }
+
+// FillerCellConfig specifies which cell to insert between compatible adjacent
+// cells in a row (e.g. to maintain N-well continuity).
+type FillerCellConfig struct {
+	Lib  string
+	Cell string
+}

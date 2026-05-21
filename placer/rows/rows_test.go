@@ -190,6 +190,54 @@ func TestRepackByWidth_OversizedGroup_PlacedAlone(t *testing.T) {
 	require.Len(t, result, 2)
 }
 
+func TestAddFiller_Empty(t *testing.T) {
+	assert.Nil(t, AddFiller(nil, func(lib, cell string) bool { return true }, "lib", "FILL", 280))
+}
+
+func TestAddFiller_NoCompatibleCells_NoInsert(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 300), instW("B", 300)),
+	}
+	result := AddFiller(groups, func(lib, cell string) bool { return false }, "lib", "FILL", 280)
+	require.Len(t, result, 1)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+}
+
+func TestAddFiller_BothCompatible_InsertsCell(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		{{Name: "A", Lib: "mylib", Cell: "CellA", Width: 300}, {Name: "B", Lib: "mylib", Cell: "CellA", Width: 300}},
+	}
+	compat := func(lib, cell string) bool { return lib == "mylib" }
+	result := AddFiller(groups, compat, "mylib", "FILL", 280)
+	require.Len(t, result, 1)
+	require.Len(t, result[0], 3)
+	assert.Equal(t, []string{"A", "FILLER_0", "B"}, names(result[0]))
+	assert.Equal(t, 280, result[0][1].Width)
+}
+
+func TestAddFiller_OnlyOneCompatible_NoInsert(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		{{Name: "A", Lib: "mylib", Cell: "CellA"}, {Name: "B", Lib: "other", Cell: "CellB"}},
+	}
+	compat := func(lib, cell string) bool { return lib == "mylib" }
+	result := AddFiller(groups, compat, "mylib", "FILL", 280)
+	require.Len(t, result, 1)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+}
+
+func TestAddFiller_MultipleRows_UniqueNames(t *testing.T) {
+	mk := func(name, lib string) common.SchematicInstance { return common.SchematicInstance{Name: name, Lib: lib} }
+	groups := [][]common.SchematicInstance{
+		{mk("A", "mylib"), mk("B", "mylib")},
+		{mk("C", "mylib"), mk("D", "mylib")},
+	}
+	compat := func(lib, cell string) bool { return lib == "mylib" }
+	result := AddFiller(groups, compat, "mylib", "FILL", 280)
+	require.Len(t, result, 2)
+	assert.Equal(t, []string{"A", "FILLER_0", "B"}, names(result[0]))
+	assert.Equal(t, []string{"C", "FILLER_1", "D"}, names(result[1]))
+}
+
 func TestGroup_SloppySchematic_WithinRowOffsets(t *testing.T) {
 	// Within-row Y offsets up to 0.5, row spacing is 50. threshold=1.
 	instances := []common.SchematicInstance{

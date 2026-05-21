@@ -1,6 +1,7 @@
 package rows
 
 import (
+	"fmt"
 	"placer/common"
 	"sort"
 )
@@ -105,6 +106,34 @@ func RepackByWidth(groups [][]common.SchematicInstance, targetWidth int) [][]com
 	result := make([][]common.SchematicInstance, len(bins))
 	for i, b := range bins {
 		result[i] = b.insts
+	}
+	return result
+}
+
+// AddFiller inserts a filler cell between any two adjacent instances in a row
+// that are both compatible (isCompatible returns true for their lib/cell).
+// Generated filler names are unique across all groups (FILLER_0, FILLER_1, …).
+func AddFiller(groups [][]common.SchematicInstance, isCompatible func(lib, cell string) bool, fillerLib, fillerCell string, fillerWidth int) [][]common.SchematicInstance {
+	if len(groups) == 0 {
+		return nil
+	}
+	result := make([][]common.SchematicInstance, len(groups))
+	counter := 0
+	for g, group := range groups {
+		row := make([]common.SchematicInstance, 0, len(group))
+		for i, inst := range group {
+			row = append(row, inst)
+			if i+1 < len(group) && isCompatible(inst.Lib, inst.Cell) && isCompatible(group[i+1].Lib, group[i+1].Cell) {
+				row = append(row, common.SchematicInstance{
+					Name:  fmt.Sprintf("FILLER_%d", counter),
+					Lib:   fillerLib,
+					Cell:  fillerCell,
+					Width: fillerWidth,
+				})
+				counter++
+			}
+		}
+		result[g] = row
 	}
 	return result
 }

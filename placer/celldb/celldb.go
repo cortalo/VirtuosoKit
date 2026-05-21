@@ -14,7 +14,8 @@ var (
 )
 
 type cell struct {
-	Width int `toml:"width"`
+	Width  int `toml:"width"`
+	Filler int `toml:"filler"`
 }
 
 type rawTapcell struct {
@@ -23,9 +24,15 @@ type rawTapcell struct {
 	MaxSpacing int    `toml:"max_spacing"`
 }
 
+type rawFillercell struct {
+	Lib  string `toml:"lib"`
+	Cell string `toml:"cell"`
+}
+
 type DB struct {
-	libs    map[string]map[string]cell
-	tapcell *common.TapcellConfig
+	libs       map[string]map[string]cell
+	tapcell    *common.TapcellConfig
+	fillercell *common.FillerCellConfig
 }
 
 func Load(path string) (*DB, error) {
@@ -48,6 +55,12 @@ func Load(path string) (*DB, error) {
 				Cell:       tc.Cell,
 				MaxSpacing: tc.MaxSpacing,
 			}
+		} else if key == "fillercell" {
+			var fc rawFillercell
+			if err := meta.PrimitiveDecode(prim, &fc); err != nil {
+				return nil, fmt.Errorf("celldb: fillercell: %w", err)
+			}
+			db.fillercell = &common.FillerCellConfig{Lib: fc.Lib, Cell: fc.Cell}
 		} else {
 			var cells map[string]cell
 			if err := meta.PrimitiveDecode(prim, &cells); err != nil {
@@ -77,4 +90,23 @@ func (db *DB) Tapcell() (common.TapcellConfig, bool) {
 		return common.TapcellConfig{}, false
 	}
 	return *db.tapcell, true
+}
+
+func (db *DB) FillerCell() (common.FillerCellConfig, bool) {
+	if db.fillercell == nil {
+		return common.FillerCellConfig{}, false
+	}
+	return *db.fillercell, true
+}
+
+func (db *DB) IsFillerCompatible(lib, cellName string) bool {
+	cells, ok := db.libs[lib]
+	if !ok {
+		return false
+	}
+	c, ok := cells[cellName]
+	if !ok {
+		return false
+	}
+	return c.Filler == 1
 }

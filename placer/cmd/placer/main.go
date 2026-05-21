@@ -74,6 +74,12 @@ func main() {
 		grouped = rows.RepackByWidth(grouped, *targetWidth)
 	}
 
+	if fc, ok := db.FillerCell(); ok {
+		if fw, err := db.Query(fc.Lib, fc.Cell); err == nil {
+			grouped = rows.AddFiller(grouped, db.IsFillerCompatible, fc.Lib, fc.Cell, fw)
+		}
+	}
+
 	if *verbose {
 		fmt.Fprintf(os.Stderr, "instances: %d, rows: %d\n", len(instances), len(grouped))
 		for i, row := range grouped {

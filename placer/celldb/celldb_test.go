@@ -111,3 +111,66 @@ width = 1000
 	_, ok := db.Tapcell()
 	assert.False(t, ok)
 }
+
+func TestLoad_WithFillercell_ReturnsFillercellConfig(t *testing.T) {
+	path := writeToml(t, `
+[fillercell]
+lib = "mylib"
+cell = "FILL"
+
+[mylib.CellA]
+width = 1000
+filler = 1
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+
+	fc, ok := db.FillerCell()
+	require.True(t, ok)
+	assert.Equal(t, "mylib", fc.Lib)
+	assert.Equal(t, "FILL", fc.Cell)
+}
+
+func TestLoad_WithoutFillercell_ReturnsFalse(t *testing.T) {
+	path := writeToml(t, `
+[mylib.CellA]
+width = 1000
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+
+	_, ok := db.FillerCell()
+	assert.False(t, ok)
+}
+
+func TestIsFillerCompatible_WithFillerField_ReturnsTrue(t *testing.T) {
+	path := writeToml(t, `
+[mylib.CellA]
+width = 1000
+filler = 1
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+	assert.True(t, db.IsFillerCompatible("mylib", "CellA"))
+}
+
+func TestIsFillerCompatible_WithoutFillerField_ReturnsFalse(t *testing.T) {
+	path := writeToml(t, `
+[mylib.CellA]
+width = 1000
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+	assert.False(t, db.IsFillerCompatible("mylib", "CellA"))
+}
+
+func TestIsFillerCompatible_UnknownLib_ReturnsFalse(t *testing.T) {
+	path := writeToml(t, `
+[mylib.CellA]
+width = 1000
+filler = 1
+`)
+	db, err := celldb.Load(path)
+	require.NoError(t, err)
+	assert.False(t, db.IsFillerCompatible("otherlib", "CellA"))
+}
