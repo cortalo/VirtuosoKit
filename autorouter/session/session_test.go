@@ -36,8 +36,7 @@ func (m *mockCanvas) Occupy(seg Segment) error {
 	return nil
 }
 
-func (m *mockCanvas) GetLowerLeft() Point  { return Point{X: 0, Y: 0} }
-func (m *mockCanvas) GetM3TrackWidth() int { return 100 }
+func (m *mockCanvas) GetLowerLeft() Point { return Point{X: 0, Y: 0} }
 
 // --- helpers ---
 

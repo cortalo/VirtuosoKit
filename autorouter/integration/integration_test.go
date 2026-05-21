@@ -59,7 +59,7 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 	assert.Equal(t, 300, nl.Pins[1].YHigh)
 
 	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
-	c := &canvas.Canvas{
+	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
@@ -142,7 +142,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 	require.Len(t, nl.Nets, 1)
 
 	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
-	c := &canvas.Canvas{
+	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),

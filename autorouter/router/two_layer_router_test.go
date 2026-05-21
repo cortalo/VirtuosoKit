@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newCanvas(width, height, trackWidth int) *canvas.Canvas {
+func newCanvas(width, height, trackWidth int) *canvas.TwoLayerCanvas {
 	trackCount := height / trackWidth
-	return &canvas.Canvas{
+	return &canvas.TwoLayerCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: width, Y: height},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: width, Y: height}),
@@ -20,7 +20,7 @@ func newCanvas(width, height, trackWidth int) *canvas.Canvas {
 	}
 }
 
-func newRouter(c *canvas.Canvas) *router.TwoLayerRouter {
+func newRouter(c *canvas.TwoLayerCanvas) *router.TwoLayerRouter {
 	return router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 }
 
@@ -50,7 +50,7 @@ func m3Track(segs []common.Segment, tw int) int {
 }
 
 // occupyM3Track marks a single M3 track on the canvas as occupied.
-func occupyM3Track(c *canvas.Canvas, trackID, start, end, netID, tw int) error {
+func occupyM3Track(c *canvas.TwoLayerCanvas, trackID, start, end, netID, tw int) error {
 	return c.Occupy(common.Segment{
 		LowerLeft:    common.Point{X: start, Y: trackID * tw},
 		UpperRight:   common.Point{X: end, Y: (trackID + 1) * tw},

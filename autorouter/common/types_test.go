@@ -10,8 +10,8 @@ import (
 )
 
 // testCanvas returns a canvas with LowerLeft={0,0} and M3 trackWidth=100 (10 tracks).
-func testCanvas() *canvas.Canvas {
-	return &canvas.Canvas{
+func testCanvas() *canvas.TwoLayerCanvas {
+	return &canvas.TwoLayerCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
 		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),

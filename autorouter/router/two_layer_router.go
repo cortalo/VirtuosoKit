@@ -16,7 +16,7 @@ type Canvas interface {
 	IsPassible(seg Segment) bool
 	GetLowerLeft() Point
 	GetUpperRight() Point
-	GetM3TrackWidth() int
+	GetTrackWidth(layer common.Layer) int
 	NewTrack(layer common.Layer, trackID, start, end, netID int) (TrackSegment, error)
 	NewSeg(layer common.Layer, ll, ur Point, netID int) (Segment, error)
 }
@@ -49,7 +49,7 @@ func (r *TwoLayerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) 
 
 	lowerLeft := r.canvas.GetLowerLeft()
 	upperRight := r.canvas.GetUpperRight()
-	tw := r.canvas.GetM3TrackWidth()
+	tw := r.canvas.GetTrackWidth(common.M3)
 	midTrack := (midY - lowerLeft.Y) / tw
 	maxTrack := (upperRight.Y-lowerLeft.Y)/tw - 1
 

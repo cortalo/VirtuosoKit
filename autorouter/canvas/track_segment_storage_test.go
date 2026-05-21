@@ -81,7 +81,7 @@ func TestTrackStorage_Occupy_MultipleTracks_Independent(t *testing.T) {
 	assert.True(t, s.IsPassible(TrackSegment{TrackID: 3, Start: 0, End: 100, NetID: 4}))
 }
 
-func TestTrackStorage_GetM3TrackWidth_ReturnsCorrectWidth(t *testing.T) {
+func TestTrackStorage_GetTrackWidth_ReturnsCorrectWidth(t *testing.T) {
 	s := NewTrackSegmentStorage(5, 46)
-	assert.Equal(t, 46, s.GetM3TrackWidth())
+	assert.Equal(t, 46, s.GetTrackWidth())
 }

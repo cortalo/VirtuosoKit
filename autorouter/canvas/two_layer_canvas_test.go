@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newCanvas() *Canvas {
-	return &Canvas{
+func newCanvas() *TwoLayerCanvas {
+	return &TwoLayerCanvas{
 		LowerLeft:  Point{0, 0},
 		UpperRight: Point{1000, 1000},
 		M2Storage:  NewSegmentStore(Point{0, 0}, Point{1000, 1000}),
@@ -138,5 +138,5 @@ func TestCanvas_OccupyM3_Overlap_DifferentNet_ReturnsError(t *testing.T) {
 
 func TestCanvas_GetM3TrackWidth_ReturnsCorrectWidth(t *testing.T) {
 	c := newCanvas()
-	assert.Equal(t, 100, c.GetM3TrackWidth())
+	assert.Equal(t, 100, c.GetTrackWidth(common.M3))
 }

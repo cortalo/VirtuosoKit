@@ -12,7 +12,7 @@ import (
 )
 
 func newIntegrationSession(nets []*common.Net) *session.Session {
-	c := &canvas.Canvas{
+	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1000}),
@@ -99,7 +99,7 @@ func TestIntegration_MixedNets_SuccessAndError(t *testing.T) {
 // Net 2 pin at YLow=100,YHigh=400: router M2 Y=[100,200], touches 300 but no
 // strict overlap → router accepts. Session extends to [100,400] → overlaps [300,1000] → panic.
 func TestIntegration_PinBBoxExtension_M2OverlapPanic(t *testing.T) {
-	c := &canvas.Canvas{
+	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1200},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1200}),

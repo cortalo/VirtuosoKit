@@ -6,8 +6,8 @@ type Track interface {
 }
 
 type TrackSegmentStorageImpl struct {
-	M3TrackWidth int
-	Tracks       []Track
+	TrackWidth int
+	Tracks     []Track
 }
 
 func NewTrackSegmentStorage(trackCount, trackWidth int) *TrackSegmentStorageImpl {
@@ -16,8 +16,8 @@ func NewTrackSegmentStorage(trackCount, trackWidth int) *TrackSegmentStorageImpl
 		tracks[i] = NewTrackImpl()
 	}
 	return &TrackSegmentStorageImpl{
-		M3TrackWidth: trackWidth,
-		Tracks:       tracks,
+		TrackWidth: trackWidth,
+		Tracks:     tracks,
 	}
 }
 
@@ -35,6 +35,6 @@ func (tss *TrackSegmentStorageImpl) Occupy(seg TrackSegment) error {
 	return tss.Tracks[seg.TrackID].Occupy(seg.NetID, seg.Start, seg.End)
 }
 
-func (tss *TrackSegmentStorageImpl) GetM3TrackWidth() int {
-	return tss.M3TrackWidth
+func (tss *TrackSegmentStorageImpl) GetTrackWidth() int {
+	return tss.TrackWidth
 }

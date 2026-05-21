@@ -130,7 +130,7 @@ func main() {
 	}
 
 	trackCount := (ur.Y - ll.Y) / *m3TrackWidth
-	c := &canvas.Canvas{
+	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
