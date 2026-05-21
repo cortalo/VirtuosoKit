@@ -78,3 +78,28 @@ func TestQuery_LayerNotFound(t *testing.T) {
 	_, err = db.Query("tsmc18", "M1")
 	assert.ErrorIs(t, err, drcdb.ErrLayerNotFound)
 }
+
+func TestQuery_ReturnsViaEnclosure(t *testing.T) {
+	toml := `
+[lib.M2]
+min_area = 100000
+end_extension = 60
+via_enclosure = 30
+`
+	db, err := drcdb.Load(writeTempTOML(t, toml))
+	require.NoError(t, err)
+
+	spec, err := db.Query("lib", "M2")
+	require.NoError(t, err)
+	assert.Equal(t, 60, spec.EndExtension())
+	assert.Equal(t, 30, spec.ViaEnclosure())
+}
+
+func TestQuery_ViaEnclosureDefaultsToZero(t *testing.T) {
+	db, err := drcdb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	spec, err := db.Query("tsmc18", "M2")
+	require.NoError(t, err)
+	assert.Equal(t, 0, spec.ViaEnclosure())
+}

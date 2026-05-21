@@ -153,6 +153,7 @@ type Netlist struct {
 type DRCSpec interface {
 	MinArea() int
 	EndExtension() int
+	ViaEnclosure() int
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
@@ -160,3 +161,4 @@ type NoDRC struct{}
 
 func (NoDRC) MinArea() int      { return 0 }
 func (NoDRC) EndExtension() int { return 0 }
+func (NoDRC) ViaEnclosure() int { return 0 }

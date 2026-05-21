@@ -19,6 +19,7 @@ type rawEntry struct {
 	// metal layer fields
 	MinArea      int `toml:"min_area"`
 	EndExtension int `toml:"end_extension"`
+	ViaEnclosure int `toml:"via_enclosure"`
 	// via fields
 	ViaDef string `toml:"via_def"`
 	CutW   int    `toml:"cut_w"`
@@ -31,10 +32,12 @@ type rawEntry struct {
 type DRCSpec struct {
 	minArea      int
 	endExtension int
+	viaEnclosure int
 }
 
 func (s DRCSpec) MinArea() int      { return s.minArea }
 func (s DRCSpec) EndExtension() int { return s.endExtension }
+func (s DRCSpec) ViaEnclosure() int { return s.viaEnclosure }
 
 type DB struct {
 	libs map[string]map[string]rawEntry
@@ -57,7 +60,7 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension}, nil
+	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure}, nil
 }
 
 func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {

@@ -72,8 +72,8 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 
 func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.netlist.Nets))
-	m2EndExt := s.m2DRC.EndExtension()
-	via23EndExt := max(s.m2DRC.EndExtension(), s.m3DRC.EndExtension())
+	m2ViaEnc := s.m2DRC.ViaEnclosure()
+	via23ViaEnc := max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure())
 
 	for i, net := range s.netlist.Nets {
 		m2Segs, m3, err := s.router.Route(net.Pins, net.ID)
@@ -94,12 +94,12 @@ func (s *Session) Route() []NetResult {
 		segs := make([]Segment, 0, len(m2Segs))
 		segs = append(segs, m2Segs...)
 		for j, pin := range net.Pins {
-			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12, m2EndExt)
+			segs = appendViaCuts(segs, s.via12, pinBBox(pin), m2Segs[j], common.Via12, m2ViaEnc)
 		}
 		if m3.Start != m3.End {
 			segs = append(segs, m3Seg)
 			for j := range net.Pins {
-				segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23EndExt)
+				segs = appendViaCuts(segs, s.via23, m2Segs[j], m3Seg, common.Via23, via23ViaEnc)
 			}
 		}
 
