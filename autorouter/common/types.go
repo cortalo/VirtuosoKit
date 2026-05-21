@@ -124,6 +124,7 @@ type Shape struct {
 	NetID      int     `json:"net_id"`
 	Layer      Layer   `json:"layer"`
 	Purpose    Purpose `json:"purpose"`
+	Name       string  `json:"name,omitempty"`
 }
 
 type Segment struct {

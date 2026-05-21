@@ -101,6 +101,7 @@ func (s *Session) Route() []NetResult {
 			UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
 			Layer:      common.M1,
 			Purpose:    common.Pin,
+			Name:       pin.Name,
 		}
 	})
 	if len(pinShapes) > 0 {
