@@ -30,6 +30,16 @@ func (c *TwoLayerCanvas) IsPassible(seg Segment) bool {
 	}
 }
 
+func (c *TwoLayerCanvas) IsOccupied(seg Segment) bool {
+	switch seg.Layer {
+	case common.M3:
+		return c.M3Storage.IsOccupied(lo.Must(seg.ToTrack(c.M3Storage.GetTrackWidth())))
+	default:
+		panic(ErrUnknownLayer)
+		return false
+	}
+}
+
 func (c *TwoLayerCanvas) Occupy(seg Segment) error {
 	switch seg.Layer {
 	case common.M2:

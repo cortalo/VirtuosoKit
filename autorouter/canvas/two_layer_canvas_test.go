@@ -102,6 +102,32 @@ func TestCanvas_IsPassibleM3_DifferentTrack_Passable(t *testing.T) {
 	assert.True(t, c.IsPassible(mkM3Seg(1, 100, 500, 2)))
 }
 
+// --- IsOccupied M3 ---
+
+func TestCanvas_IsOccupiedM3_EmptyCanvas_NotOccupied(t *testing.T) {
+	c := newCanvas()
+	assert.False(t, c.IsOccupied(mkM3Seg(0, 0, 500, 1)))
+}
+
+func TestCanvas_IsOccupiedM3_AfterOccupy_SameNet_IsOccupied(t *testing.T) {
+	c := newCanvas()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsOccupied(mkM3Seg(0, 100, 500, 1)))
+}
+
+func TestCanvas_IsOccupiedM3_AfterOccupy_DifferentNet_IsOccupied(t *testing.T) {
+	c := newCanvas()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	// different net: IsPassible returns false, IsOccupied also returns true
+	assert.True(t, c.IsOccupied(mkM3Seg(0, 200, 600, 2)))
+}
+
+func TestCanvas_IsOccupiedM3_DifferentTrack_NotOccupied(t *testing.T) {
+	c := newCanvas()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.False(t, c.IsOccupied(mkM3Seg(1, 100, 500, 2)))
+}
+
 // --- Occupy M2 ---
 
 func TestCanvas_OccupyM2_Basic_Succeeds(t *testing.T) {

@@ -148,6 +148,57 @@ func TestFTC_GetTrackWidth_M3(t *testing.T) {
 	assert.Equal(t, 100, c.GetTrackWidth(common.M3))
 }
 
+// --- IsOccupied M2 ---
+
+func TestFTC_IsOccupiedM2_EmptyCanvas_NotOccupied(t *testing.T) {
+	c := newFTC()
+	assert.False(t, c.IsOccupied(mkFTM2Seg(0, 0, 500, 1)))
+}
+
+func TestFTC_IsOccupiedM2_AfterOccupy_SameNet_IsOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkFTM2Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsOccupied(mkFTM2Seg(0, 100, 500, 1)))
+}
+
+func TestFTC_IsOccupiedM2_AfterOccupy_DifferentNet_IsOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkFTM2Seg(0, 100, 500, 1)))
+	// different net: IsPassible returns false but IsOccupied also returns true
+	assert.True(t, c.IsOccupied(mkFTM2Seg(0, 200, 600, 2)))
+}
+
+func TestFTC_IsOccupiedM2_DifferentTrack_NotOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkFTM2Seg(0, 100, 500, 1)))
+	assert.False(t, c.IsOccupied(mkFTM2Seg(1, 100, 500, 2)))
+}
+
+// --- IsOccupied M3 ---
+
+func TestFTC_IsOccupiedM3_EmptyCanvas_NotOccupied(t *testing.T) {
+	c := newFTC()
+	assert.False(t, c.IsOccupied(mkM3Seg(0, 0, 500, 1)))
+}
+
+func TestFTC_IsOccupiedM3_AfterOccupy_SameNet_IsOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsOccupied(mkM3Seg(0, 100, 500, 1)))
+}
+
+func TestFTC_IsOccupiedM3_AfterOccupy_DifferentNet_IsOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.True(t, c.IsOccupied(mkM3Seg(0, 200, 600, 2)))
+}
+
+func TestFTC_IsOccupiedM3_DifferentTrack_NotOccupied(t *testing.T) {
+	c := newFTC()
+	require.NoError(t, c.Occupy(mkM3Seg(0, 100, 500, 1)))
+	assert.False(t, c.IsOccupied(mkM3Seg(1, 100, 500, 2)))
+}
+
 // --- NewTrack ---
 
 func TestFTC_NewTrackM2_Basic(t *testing.T) {

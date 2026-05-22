@@ -1,8 +1,10 @@
 package canvas
 
-type Track interface {
-	IsPassible(netID, start, end int) bool
-	Occupy(netID, start, end int) error
+type TrackSegmentStorage interface {
+	IsPassible(seg TrackSegment) bool
+	IsOccupied(seg TrackSegment) bool
+	Occupy(seg TrackSegment) error
+	GetTrackWidth() int
 }
 
 type TrackSegmentStorageImpl struct {
@@ -26,6 +28,13 @@ func (tss *TrackSegmentStorageImpl) IsPassible(seg TrackSegment) bool {
 		return false
 	}
 	return tss.Tracks[seg.TrackID].IsPassible(seg.NetID, seg.Start, seg.End)
+}
+
+func (tss *TrackSegmentStorageImpl) IsOccupied(seg TrackSegment) bool {
+	if seg.TrackID < 0 || seg.TrackID >= len(tss.Tracks) {
+		return false
+	}
+	return tss.Tracks[seg.TrackID].IsOccupied(seg.Start, seg.End)
 }
 
 func (tss *TrackSegmentStorageImpl) Occupy(seg TrackSegment) error {

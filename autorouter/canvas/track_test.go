@@ -62,6 +62,47 @@ func TestTrack_IsPassable_MultipleIntervals(t *testing.T) {
 	assert.False(t, track.IsPassible(4, 45, 55)) // overlaps net3
 }
 
+// --- IsOccupied ---
+
+func TestTrack_IsOccupied_EmptyTrack_NotOccupied(t *testing.T) {
+	track := NewTrackImpl()
+	assert.False(t, track.IsOccupied(0, 10))
+	assert.False(t, track.IsOccupied(100, 200))
+}
+
+func TestTrack_IsOccupied_SameNet_IsOccupied(t *testing.T) {
+	track := NewTrackImpl()
+	require.NoError(t, track.Occupy(1, 10, 20))
+	assert.True(t, track.IsOccupied(10, 20))
+	assert.True(t, track.IsOccupied(5, 15))  // overlaps left
+	assert.True(t, track.IsOccupied(15, 25)) // overlaps right
+	assert.True(t, track.IsOccupied(12, 18)) // inside
+	assert.True(t, track.IsOccupied(5, 25))  // contains
+}
+
+func TestTrack_IsOccupied_DifferentNet_IsOccupied(t *testing.T) {
+	track := NewTrackImpl()
+	require.NoError(t, track.Occupy(1, 10, 20))
+	// IsOccupied ignores netID: any metal blocks.
+	require.NoError(t, track.Occupy(2, 30, 40))
+	assert.True(t, track.IsOccupied(10, 20))
+	assert.True(t, track.IsOccupied(30, 40))
+}
+
+func TestTrack_IsOccupied_NonOverlapping_NotOccupied(t *testing.T) {
+	track := NewTrackImpl()
+	require.NoError(t, track.Occupy(1, 10, 20))
+	assert.False(t, track.IsOccupied(0, 10))  // adjacent left
+	assert.False(t, track.IsOccupied(20, 30)) // adjacent right
+	assert.False(t, track.IsOccupied(0, 5))   // far left
+}
+
+func TestTrack_IsOccupied_IntervalBeforeStart_ExtendsIntoRange(t *testing.T) {
+	track := NewTrackImpl()
+	require.NoError(t, track.Occupy(1, 5, 15))
+	assert.True(t, track.IsOccupied(10, 20)) // interval starts before 10 but extends in
+}
+
 // --- Occupy ---
 
 func TestTrack_Occupy_BasicOccupy_Succeeds(t *testing.T) {

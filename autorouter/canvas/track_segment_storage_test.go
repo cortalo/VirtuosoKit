@@ -49,6 +49,49 @@ func TestTrackStorage_IsPassable_DifferentNetID_NotOverlapping_Passable(t *testi
 	assert.True(t, s.IsPassible(TrackSegment{TrackID: 2, Start: 0, End: 10, NetID: 2}))
 }
 
+// --- IsOccupied ---
+
+func TestTrackStorage_IsOccupied_EmptyStorage_NotOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 0, Start: 0, End: 100}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 4, Start: 0, End: 100}))
+}
+
+func TestTrackStorage_IsOccupied_InvalidTrackID_NotOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: -1, Start: 0, End: 100}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 5, Start: 0, End: 100}))
+}
+
+func TestTrackStorage_IsOccupied_SameNet_IsOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	require.NoError(t, s.Occupy(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 1}))
+	assert.True(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 1}))
+	assert.True(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 0, End: 60, NetID: 1}))
+}
+
+func TestTrackStorage_IsOccupied_DifferentNet_IsOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	require.NoError(t, s.Occupy(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 1}))
+	// different net still counts as occupied
+	assert.True(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 2}))
+	assert.True(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 5, End: 20, NetID: 2}))
+}
+
+func TestTrackStorage_IsOccupied_DifferentTrack_NotOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	require.NoError(t, s.Occupy(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 1}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 1, Start: 10, End: 50}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 3, Start: 10, End: 50}))
+}
+
+func TestTrackStorage_IsOccupied_NonOverlapping_NotOccupied(t *testing.T) {
+	s := NewTrackSegmentStorage(5, 10)
+	require.NoError(t, s.Occupy(TrackSegment{TrackID: 2, Start: 10, End: 50, NetID: 1}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 50, End: 100}))
+	assert.False(t, s.IsOccupied(TrackSegment{TrackID: 2, Start: 0, End: 10}))
+}
+
 // --- Occupy ---
 
 func TestTrackStorage_Occupy_Basic_Succeeds(t *testing.T) {

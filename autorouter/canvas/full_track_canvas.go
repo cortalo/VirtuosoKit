@@ -47,6 +47,11 @@ func (c *FullTrackCanvas) IsPassible(seg Segment) bool {
 	return st.IsPassible(lo.Must(seg.ToTrack(st.GetTrackWidth())))
 }
 
+func (c *FullTrackCanvas) IsOccupied(seg Segment) bool {
+	st := c.storageFor(seg.Layer)
+	return st.IsOccupied(lo.Must(seg.ToTrack(st.GetTrackWidth())))
+}
+
 func (c *FullTrackCanvas) Occupy(seg Segment) error {
 	st := c.storageFor(seg.Layer)
 	return st.Occupy(lo.Must(seg.ToTrack(st.GetTrackWidth())))

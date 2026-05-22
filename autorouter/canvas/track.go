@@ -8,6 +8,12 @@ import (
 
 var ErrOverlap = errors.New("segment overlaps existing occupation")
 
+type Track interface {
+	IsPassible(netID, start, end int) bool
+	IsOccupied(start, end int) bool
+	Occupy(netID, start, end int) error
+}
+
 type interval struct {
 	start, end, netID int
 }
@@ -46,6 +52,26 @@ func (t *TrackImpl) IsPassible(netID, start, end int) bool {
 
 	return passable
 
+}
+
+func (t *TrackImpl) IsOccupied(start, end int) bool {
+	occupied := false
+	t.occupied.AscendGreaterOrEqual(interval{start: start}, func(iv interval) bool {
+		if iv.start >= end {
+			return false
+		}
+		occupied = true
+		return false
+	})
+	if !occupied {
+		t.occupied.DescendLessOrEqual(interval{start: start - 1}, func(iv interval) bool {
+			if iv.end > start {
+				occupied = true
+			}
+			return false
+		})
+	}
+	return occupied
 }
 
 func (t *TrackImpl) Occupy(netID, start, end int) error {

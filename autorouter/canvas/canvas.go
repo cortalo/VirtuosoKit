@@ -14,12 +14,6 @@ var (
 	ErrUnknownLayer   = errors.New("cannot occupy segment with unknown layer")
 )
 
-type TrackSegmentStorage interface {
-	IsPassible(seg TrackSegment) bool
-	Occupy(seg TrackSegment) error
-	GetTrackWidth() int
-}
-
 type SegmentStorage interface {
 	IsPassible(seg Segment) bool
 	Occupy(seg Segment) error

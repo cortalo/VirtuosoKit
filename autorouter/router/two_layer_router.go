@@ -14,6 +14,7 @@ type RoutingPin = common.RoutingPin
 type Canvas interface {
 	Inbound(p Point) bool
 	IsPassible(seg Segment) bool
+	IsOccupied(seg Segment) bool
 	GetLowerLeft() Point
 	GetUpperRight() Point
 	GetTrackWidth(layer common.Layer) int
@@ -75,8 +76,8 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 	m3Ext := r.m3DRC.EndExtension()
 	m3, err := r.canvas.NewTrack(common.M3, trackID, minX-m3Ext, maxX+r.m2Width+m3Ext, netID)
 	if err != nil || !r.canvas.IsPassible(m3.ToSeg()) ||
-		(!m3.IsFirstTrack() && !r.canvas.IsPassible(m3.PrevTrack().ToSeg())) ||
-		(!m3.IsLastTrack() && !r.canvas.IsPassible(m3.NextTrack().ToSeg())) {
+		(!m3.IsFirstTrack() && r.canvas.IsOccupied(m3.PrevTrack().ToSeg())) ||
+		(!m3.IsLastTrack() && r.canvas.IsOccupied(m3.NextTrack().ToSeg())) {
 		return nil, false
 	}
 
