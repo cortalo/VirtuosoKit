@@ -133,6 +133,21 @@ func (r *FullTrackRouter) tryTrack(
 	for i, pin := range pins {
 		found := false
 		for _, t := range m2Candidates[i] {
+			// Reject if adjacent to any M2 track already chosen for an earlier pin:
+			// adjacent same-net M2 tracks produce adjacent vias on the M3 column,
+			// violating via spacing DRC. Canvas IsOccupied can't catch this because
+			// earlier pins haven't been committed to the canvas yet.
+			adjacentToChosen := false
+			for j := 0; j < i; j++ {
+				diff := t - chosenM2TrackIDs[j]
+				if diff == 1 || diff == -1 {
+					adjacentToChosen = true
+					break
+				}
+			}
+			if adjacentToChosen {
+				continue
+			}
 			// M2 runs along its direction; its start/end are the "along-axis" pin extents
 			// merged with the M3 band to ensure connectivity.
 			var pinAlong0, pinAlong1 int

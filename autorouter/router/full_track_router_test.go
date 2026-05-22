@@ -152,6 +152,26 @@ func TestFTRoute_PreferredM2TrackBlocked_UsesNextCandidate(t *testing.T) {
 	assert.Equal(t, 20, segs[0].LowerLeft.X, "pin1 M2 should use track 2 (X=20)")
 }
 
+// Two pins whose natural M2 track assignment would be adjacent.
+// Pin1: X=[0,100]   → only track 0.
+// Pin2: X=[100,280] → candidates [track1, track2]; track1 is closer but adjacent
+// to track0 → must be rejected; track2 (X=[200,300]) should be chosen instead.
+func TestFTRoute_IntraPinAdjacentM2_UsesNonAdjacentTrack(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := newFTRouter(c)
+
+	segs, err := r.Route(ftPins(
+		[4]int{0, 100, 100, 200},
+		[4]int{100, 280, 100, 200},
+	), 1)
+
+	require.NoError(t, err)
+	require.Len(t, segs, 3)
+	// segs[0]=pin1 M2, segs[1]=pin2 M2, segs[2]=M3.
+	assert.Equal(t, 0, segs[0].LowerLeft.X, "pin1 M2 should be track 0 (X=0)")
+	assert.Equal(t, 200, segs[1].LowerLeft.X, "pin2 M2 should skip adjacent track 1 and use track 2 (X=200)")
+}
+
 func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
 	for i := 0; i < 10; i++ {
