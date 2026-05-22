@@ -83,10 +83,26 @@ func (f *ignoreNetFlag) Set(v string) error {
 	return nil
 }
 
+func parseDir(s string) common.Direction {
+	switch s {
+	case "vertical":
+		return common.Vertical
+	case "horizontal":
+		return common.Horizontal
+	default:
+		fmt.Fprintf(os.Stderr, "error: unknown --m2-dir %q (use vertical or horizontal)\n", s)
+		os.Exit(1)
+		return 0
+	}
+}
+
 func main() {
 	verbose := flag.Bool("verbose", false, "print routing progress to stderr")
+	mode := flag.String("mode", "classic", "routing mode: classic or full-track")
 	m3TrackWidth := flag.Int("m3-track-width", 100, "M3 track width in nm")
-	m2Width := flag.Int("m2-width", 100, "M2 via width in nm")
+	m2Width := flag.Int("m2-width", 100, "M2 wire width in nm (classic mode)")
+	m2TrackWidth := flag.Int("m2-track-width", 100, "M2 track width in nm (full-track mode)")
+	m2Dir := flag.String("m2-dir", "vertical", "M2 routing direction: vertical or horizontal (full-track mode)")
 	var ignoreNets ignoreNetFlag
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	var ignoreLibs ignoreNetFlag
@@ -129,25 +145,54 @@ func main() {
 		os.Exit(1)
 	}
 
-	trackCount := (ur.Y - ll.Y) / *m3TrackWidth
-	c := &canvas.TwoLayerCanvas{
-		LowerLeft:  ll,
-		UpperRight: ur,
-		M2Storage:  canvas.NewSegmentStore(ll, ur),
-		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, *m3TrackWidth),
-	}
 	m2DRC := loadDRCSpec(drcDB, *processLib, "M2")
 	m3DRC := loadDRCSpec(drcDB, *processLib, "M3")
 	via12 := loadViaConfig(drcDB, *processLib, "Via12")
 	via23 := loadViaConfig(drcDB, *processLib, "Via23")
+
+	var c session.Canvas
+	var r session.Router
+	switch *mode {
+	case "classic":
+		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
+		tlc := &canvas.TwoLayerCanvas{
+			LowerLeft:  ll,
+			UpperRight: ur,
+			M2Storage:  canvas.NewSegmentStore(ll, ur),
+			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
+		}
+		c, r = tlc, router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC)
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "mode: classic  m3-tracks=%d\n", m3TrackCount)
+		}
+	case "full-track":
+		m2TrackCount := (ur.X - ll.X) / *m2TrackWidth
+		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
+		ftc := &canvas.FullTrackCanvas{
+			LowerLeft:  ll,
+			UpperRight: ur,
+			M2Storage:  canvas.NewTrackSegmentStorage(m2TrackCount, *m2TrackWidth),
+			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
+			M2Dir:      parseDir(*m2Dir),
+		}
+		c, r = ftc, router.NewFullTrackRouter(ftc, parseDir(*m2Dir), m2DRC, m3DRC)
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "mode: full-track  m2-tracks=%d m3-tracks=%d m2-dir=%s\n",
+				m2TrackCount, m3TrackCount, *m2Dir)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "error: unknown --mode %q (use classic or full-track)\n", *mode)
+		os.Exit(1)
+	}
+
 	if *verbose {
-		fmt.Fprintf(os.Stderr, "canvas: ll=%v ur=%v tracks=%d\n", ll, ur, trackCount)
+		fmt.Fprintf(os.Stderr, "canvas: ll=%v ur=%v\n", ll, ur)
 		fmt.Fprintf(os.Stderr, "nets: %d to route\n", len(nl.Nets))
 		fmt.Fprintf(os.Stderr, "via12: %+v\n", via12)
 		fmt.Fprintf(os.Stderr, "via23: %+v\n", via23)
 	}
 
-	s := session.NewSession(c, router.NewTwoLayerRouter(c, *m2Width, m2DRC, m3DRC), nl, via12, via23, m2DRC, m3DRC)
+	s := session.NewSession(c, r, nl, via12, via23, m2DRC, m3DRC)
 	routes := s.Route()
 
 	if *verbose {

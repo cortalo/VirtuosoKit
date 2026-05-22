@@ -74,6 +74,17 @@ const (
 	Vertical
 )
 
+func (d Direction) Perpendicular() Direction {
+	switch d {
+	case Horizontal:
+		return Vertical
+	case Vertical:
+		return Horizontal
+	default:
+		panic(ErrUnknownDirection)
+	}
+}
+
 type Purpose int
 
 const (
