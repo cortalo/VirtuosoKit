@@ -147,7 +147,10 @@ func (r *FullTrackRouter) tryTrack(
 			m2Start := min(pinAlong0, m3Lower) - m2Ext
 			m2End := max(pinAlong1, m3Upper) + m2Ext
 			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
-			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) || m2.GetArea() < r.m2DRC.MinArea() {
+			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
+				(!m2.IsFirstTrack() && !r.canvas.IsPassible(m2.PrevTrack().ToSeg())) ||
+				(!m2.IsLastTrack() && !r.canvas.IsPassible(m2.NextTrack().ToSeg())) ||
+				m2.GetArea() < r.m2DRC.MinArea() {
 				continue
 			}
 			m2Segs[i] = m2

@@ -134,7 +134,8 @@ func TestFTRoute_TwoAdjacentM3TracksBlocked_SkipsBoth(t *testing.T) {
 }
 
 // Block M2 track 0 for the Y range where pin1 would connect.
-// Pin1 spans X=[0,15]: track 0 is closer but blocked, router picks track 1.
+// Pin1 spans X=[0,25]: track 0 blocked; track 1 fails adjacent check (PrevTrack=0 blocked);
+// track 2's PrevTrack is track 1 (empty) → passes.
 func TestFTRoute_PreferredM2TrackBlocked_UsesNextCandidate(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
 	// midY=(100+100)/2=100 → midTrack=1 → M3 Y=[100,200]
@@ -142,12 +143,13 @@ func TestFTRoute_PreferredM2TrackBlocked_UsesNextCandidate(t *testing.T) {
 	require.NoError(t, occupyFTM2Track(c, 0, 100, 200, 99, 10))
 	r := newFTRouter(c)
 
-	// Pin1: X=[0,15] → candidates tracks [0,1], prefer 0 (closer) but blocked → uses 1.
-	segs, err := r.Route(ftPins([4]int{0, 15, 100, 200}, [4]int{500, 510, 100, 200}), 1)
+	// Pin1: X=[0,25] → candidates [0,1,2] sorted by proximity → [1,0,2].
+	// Track 0 blocked; track 1 rejected (PrevTrack=0 blocked); track 2 succeeds.
+	segs, err := r.Route(ftPins([4]int{0, 25, 100, 200}, [4]int{500, 510, 100, 200}), 1)
 
 	require.NoError(t, err)
-	// M2 for pin1 should start at track 1 (X=10).
-	assert.Equal(t, 10, segs[0].LowerLeft.X, "pin1 M2 should use track 1 (X=10)")
+	// M2 for pin1 should use track 2 (X=20).
+	assert.Equal(t, 20, segs[0].LowerLeft.X, "pin1 M2 should use track 2 (X=20)")
 }
 
 func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {
