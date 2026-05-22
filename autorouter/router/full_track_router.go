@@ -181,7 +181,7 @@ func (r *FullTrackRouter) tryTrack(
 	maxM2Track := lo.Max(chosenM2TrackIDs)
 
 	if minM2Track == maxM2Track {
-		allPinLo, allPinHi := 0, 0
+		result := make([]Segment, len(pins))
 		for i, pin := range pins {
 			var plo, phi int
 			switch r.m2Dir {
@@ -192,22 +192,17 @@ func (r *FullTrackRouter) tryTrack(
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
 			}
-			if i == 0 {
-				allPinLo, allPinHi = plo, phi
-			} else {
-				allPinLo = min(allPinLo, plo)
-				allPinHi = max(allPinHi, phi)
+			m2Start, m2End := r.m2DRC.ApplyEndExtension(plo, phi)
+			m2, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
+			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
+				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||
+				(!m2.IsLastTrack() && r.canvas.IsOccupied(m2.NextTrack().ToSeg())) ||
+				!r.m2DRC.SatisfiesMinArea(m2.ToSeg()) {
+				return nil, false
 			}
+			result[i] = m2.ToSeg()
 		}
-		m2Start, m2End := r.m2DRC.ApplyEndExtension(allPinLo, allPinHi)
-		merged, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
-		if err != nil || !r.canvas.IsPassible(merged.ToSeg()) ||
-			(!merged.IsFirstTrack() && r.canvas.IsOccupied(merged.PrevTrack().ToSeg())) ||
-			(!merged.IsLastTrack() && r.canvas.IsOccupied(merged.NextTrack().ToSeg())) ||
-			!r.m2DRC.SatisfiesMinArea(merged.ToSeg()) {
-			return nil, false
-		}
-		return []Segment{merged.ToSeg()}, true
+		return result, true
 	}
 
 	var m3Start, m3End int

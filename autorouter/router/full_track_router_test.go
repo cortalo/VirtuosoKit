@@ -173,7 +173,7 @@ func TestFTRoute_IntraPinAdjacentM2_UsesNonAdjacentTrack(t *testing.T) {
 }
 
 // Both pins span X=[0,100] with m2tw=100 → both land on M2 track 0.
-// No M3 is needed; the router should return a single merged M2 spanning both pins.
+// No M3 is needed; the router should return one M2 per pin (no merged segment).
 func TestFTRoute_SameM2Track_NoM3(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 100, 100)
 	r := newFTRouter(c)
@@ -185,10 +185,15 @@ func TestFTRoute_SameM2Track_NoM3(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, -1, m3Track(segs, 100), "no M3 when all pins on same M2 track")
-	require.Len(t, segs, 1, "one merged M2, no M3")
+	require.Len(t, segs, 2, "one M2 per pin, no M3")
 	assert.Equal(t, common.M2, segs[0].Layer)
-	assert.Equal(t, 100, segs[0].LowerLeft.Y, "M2 starts at lower pin YLow")
-	assert.Equal(t, 600, segs[0].UpperRight.Y, "M2 ends at upper pin YHigh")
+	assert.Equal(t, common.M2, segs[1].Layer)
+	// pin0 M2 covers its own Y range
+	assert.Equal(t, 100, segs[0].LowerLeft.Y)
+	assert.Equal(t, 200, segs[0].UpperRight.Y)
+	// pin1 M2 covers its own Y range
+	assert.Equal(t, 500, segs[1].LowerLeft.Y)
+	assert.Equal(t, 600, segs[1].UpperRight.Y)
 }
 
 func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {
