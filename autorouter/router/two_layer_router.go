@@ -73,37 +73,38 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 	minX := lo.Min(xLows)
 	maxX := lo.Max(xLows)
 
-	m3Ext := r.m3DRC.EndExtension()
-	m3, err := r.canvas.NewTrack(common.M3, trackID, minX-m3Ext, maxX+r.m2Width+m3Ext, netID)
+	m3Lo, m3Hi := r.m3DRC.ApplyEndExtension(minX, maxX+r.m2Width)
+	m3, err := r.canvas.NewTrack(common.M3, trackID, m3Lo, m3Hi, netID)
 	if err != nil || !r.canvas.IsPassible(m3.ToSeg()) ||
 		(!m3.IsFirstTrack() && r.canvas.IsOccupied(m3.PrevTrack().ToSeg())) ||
 		(!m3.IsLastTrack() && r.canvas.IsOccupied(m3.NextTrack().ToSeg())) {
 		return nil, false
 	}
 
-	m2Ext := r.m2DRC.EndExtension()
 	m2Segs := make([]Segment, len(pins))
 	for i, pin := range pins {
+		m2Lo, m2Hi := r.m2DRC.ApplyEndExtension(min(pin.YLow, m3.GetLower()), max(pin.YHigh, m3.GetUpper()))
 		m2Segs[i], err = r.canvas.NewSeg(
 			common.M2,
-			Point{X: pin.XLow, Y: min(pin.YLow, m3.GetLower()) - m2Ext},
-			Point{X: pin.XLow + r.m2Width, Y: max(pin.YHigh, m3.GetUpper()) + m2Ext},
+			Point{X: pin.XLow, Y: m2Lo},
+			Point{X: pin.XLow + r.m2Width, Y: m2Hi},
 			netID,
 		)
-		if err != nil || !r.canvas.IsPassible(m2Segs[i]) || m2Segs[i].GetArea() < r.m2DRC.MinArea() {
+		if err != nil || !r.canvas.IsPassible(m2Segs[i]) || !r.m2DRC.SatisfiesMinArea(m2Segs[i]) {
 			return nil, false
 		}
 	}
 
-	if m3.GetArea() < r.m3DRC.MinArea() {
+	if !r.m3DRC.SatisfiesMinArea(m3.ToSeg()) {
 		for i, pin := range pins {
+			pinLo, pinHi := r.m2DRC.ApplyEndExtension(pin.YLow, pin.YHigh)
 			yLow := m3.GetLower()
 			if pin.YLow < m3.GetLower() {
-				yLow = pin.YLow - m2Ext
+				yLow = pinLo
 			}
 			yHigh := m3.GetUpper()
 			if pin.YHigh > m3.GetUpper() {
-				yHigh = pin.YHigh + m2Ext
+				yHigh = pinHi
 			}
 			m2Segs[i], err = r.canvas.NewSeg(
 				common.M2,

@@ -26,9 +26,9 @@ func newRouter(c *canvas.TwoLayerCanvas) *router.TwoLayerRouter {
 
 type m3MinAreaDRC struct{ area int }
 
-func (d m3MinAreaDRC) MinArea() int      { return d.area }
-func (d m3MinAreaDRC) EndExtension() int { return 0 }
-func (d m3MinAreaDRC) ViaEnclosure() int { return 0 }
+func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= d.area }
+func (d m3MinAreaDRC) ApplyEndExtension(lo, hi int) (int, int)  { return lo, hi }
+func (d m3MinAreaDRC) ViaEnclosure() int                        { return 0 }
 
 func pins(coords ...[2]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))

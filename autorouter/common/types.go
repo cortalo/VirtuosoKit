@@ -235,17 +235,17 @@ type Netlist struct {
 }
 
 type DRCSpec interface {
-	MinArea() int
-	EndExtension() int
+	SatisfiesMinArea(seg Segment) bool
+	ApplyEndExtension(lo, hi int) (int, int)
 	ViaEnclosure() int
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
 type NoDRC struct{}
 
-func (NoDRC) MinArea() int      { return 0 }
-func (NoDRC) EndExtension() int { return 0 }
-func (NoDRC) ViaEnclosure() int { return 0 }
+func (NoDRC) SatisfiesMinArea(_ Segment) bool         { return true }
+func (NoDRC) ApplyEndExtension(lo, hi int) (int, int) { return lo, hi }
+func (NoDRC) ViaEnclosure() int                       { return 0 }
 
 // ToTrack converts a Segment to a TrackSegment using seg.Dir and seg.CanvasOrigin.
 // Horizontal: TrackID from Y, Start/End are X coordinates.

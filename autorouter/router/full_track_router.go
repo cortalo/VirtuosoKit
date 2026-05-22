@@ -124,9 +124,6 @@ func (r *FullTrackRouter) tryTrack(
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
 	}
-	m3Ext := r.m3DRC.EndExtension()
-	m2Ext := r.m2DRC.EndExtension()
-
 	// For each pin, pick the passible M2 track closest to the pin center.
 	m2Segs := make([]TrackSegment, len(pins))
 	chosenM2TrackIDs := make([]int, len(pins))
@@ -159,13 +156,12 @@ func (r *FullTrackRouter) tryTrack(
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
 			}
-			m2Start := min(pinAlong0, m3Lower) - m2Ext
-			m2End := max(pinAlong1, m3Upper) + m2Ext
+			m2Start, m2End := r.m2DRC.ApplyEndExtension(min(pinAlong0, m3Lower), max(pinAlong1, m3Upper))
 			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
 			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
 				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||
 				(!m2.IsLastTrack() && r.canvas.IsOccupied(m2.NextTrack().ToSeg())) ||
-				m2.GetArea() < r.m2DRC.MinArea() {
+				!r.m2DRC.SatisfiesMinArea(m2.ToSeg()) {
 				continue
 			}
 			m2Segs[i] = m2
@@ -186,11 +182,9 @@ func (r *FullTrackRouter) tryTrack(
 	var m3Start, m3End int
 	switch m3Dir {
 	case common.Horizontal:
-		m3Start = origin.X + minM2Track*m2tw - m3Ext
-		m3End = origin.X + (maxM2Track+1)*m2tw + m3Ext
+		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.X+minM2Track*m2tw, origin.X+(maxM2Track+1)*m2tw)
 	case common.Vertical:
-		m3Start = origin.Y + minM2Track*m2tw - m3Ext
-		m3End = origin.Y + (maxM2Track+1)*m2tw + m3Ext
+		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.Y+minM2Track*m2tw, origin.Y+(maxM2Track+1)*m2tw)
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
 	}
@@ -201,7 +195,7 @@ func (r *FullTrackRouter) tryTrack(
 		(!m3.IsLastTrack() && r.canvas.IsOccupied(m3.NextTrack().ToSeg())) {
 		return nil, false
 	}
-	if m3.GetArea() < r.m3DRC.MinArea() {
+	if !r.m3DRC.SatisfiesMinArea(m3.ToSeg()) {
 		return nil, false
 	}
 

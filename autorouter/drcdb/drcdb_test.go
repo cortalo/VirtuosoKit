@@ -5,11 +5,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	"autorouter/common"
 	"autorouter/drcdb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// segWithArea returns a Segment whose area equals w*h.
+func segWithArea(area int) common.Segment {
+	return common.Segment{
+		LowerLeft:  common.Point{X: 0, Y: 0},
+		UpperRight: common.Point{X: area, Y: 1},
+	}
+}
 
 const testTOML = `
 [tsmc18.M2]
@@ -51,7 +60,8 @@ func TestQuery_ReturnsCorrectMinArea(t *testing.T) {
 
 	spec, err := db.Query("tsmc18", "M2")
 	require.NoError(t, err)
-	assert.Equal(t, 100000, spec.MinArea())
+	assert.True(t, spec.SatisfiesMinArea(segWithArea(100000)), "area==minArea should satisfy")
+	assert.False(t, spec.SatisfiesMinArea(segWithArea(99999)), "area<minArea should not satisfy")
 }
 
 func TestQuery_DifferentLibAndLayer(t *testing.T) {
@@ -60,7 +70,8 @@ func TestQuery_DifferentLibAndLayer(t *testing.T) {
 
 	spec, err := db.Query("other", "M2")
 	require.NoError(t, err)
-	assert.Equal(t, 50000, spec.MinArea())
+	assert.True(t, spec.SatisfiesMinArea(segWithArea(50000)), "area==minArea should satisfy")
+	assert.False(t, spec.SatisfiesMinArea(segWithArea(49999)), "area<minArea should not satisfy")
 }
 
 func TestQuery_LibNotFound(t *testing.T) {
@@ -91,7 +102,9 @@ via_enclosure = 30
 
 	spec, err := db.Query("lib", "M2")
 	require.NoError(t, err)
-	assert.Equal(t, 60, spec.EndExtension())
+	lo, hi := spec.ApplyEndExtension(100, 200)
+	assert.Equal(t, 40, lo)  // 100 - 60
+	assert.Equal(t, 260, hi) // 200 + 60
 	assert.Equal(t, 30, spec.ViaEnclosure())
 }
 

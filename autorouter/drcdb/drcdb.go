@@ -35,8 +35,10 @@ type DRCSpec struct {
 	viaEnclosure int
 }
 
-func (s DRCSpec) MinArea() int      { return s.minArea }
-func (s DRCSpec) EndExtension() int { return s.endExtension }
+func (s DRCSpec) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= s.minArea }
+func (s DRCSpec) ApplyEndExtension(lo, hi int) (int, int) {
+	return lo - s.endExtension, hi + s.endExtension
+}
 func (s DRCSpec) ViaEnclosure() int { return s.viaEnclosure }
 
 type DB struct {
