@@ -179,6 +179,37 @@ func (r *FullTrackRouter) tryTrack(
 	// For M3=Vertical, M2 tracks are horizontal (indexed by Y), so M3 start/end are Y coords.
 	minM2Track := lo.Min(chosenM2TrackIDs)
 	maxM2Track := lo.Max(chosenM2TrackIDs)
+
+	if minM2Track == maxM2Track {
+		allPinLo, allPinHi := 0, 0
+		for i, pin := range pins {
+			var plo, phi int
+			switch r.m2Dir {
+			case common.Vertical:
+				plo, phi = pin.YLow, pin.YHigh
+			case common.Horizontal:
+				plo, phi = pin.XLow, pin.XHigh
+			case common.UnknownDirection:
+				panic(common.ErrUnknownDirection)
+			}
+			if i == 0 {
+				allPinLo, allPinHi = plo, phi
+			} else {
+				allPinLo = min(allPinLo, plo)
+				allPinHi = max(allPinHi, phi)
+			}
+		}
+		m2Start, m2End := r.m2DRC.ApplyEndExtension(allPinLo, allPinHi)
+		merged, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
+		if err != nil || !r.canvas.IsPassible(merged.ToSeg()) ||
+			(!merged.IsFirstTrack() && r.canvas.IsOccupied(merged.PrevTrack().ToSeg())) ||
+			(!merged.IsLastTrack() && r.canvas.IsOccupied(merged.NextTrack().ToSeg())) ||
+			!r.m2DRC.SatisfiesMinArea(merged.ToSeg()) {
+			return nil, false
+		}
+		return []Segment{merged.ToSeg()}, true
+	}
+
 	var m3Start, m3End int
 	switch m3Dir {
 	case common.Horizontal:
