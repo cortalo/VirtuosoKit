@@ -2,9 +2,9 @@ package integration_test
 
 import (
 	"autorouter/canvas"
+	"autorouter/celldb"
 	"autorouter/common"
 	"autorouter/netlist"
-	"autorouter/pindb"
 	"autorouter/router"
 	"autorouter/session"
 	"testing"
@@ -30,7 +30,7 @@ import (
 // Router selects track 99 (trackY=-100..0) — midY=(-300+100)/2=-100.
 // Session extends M2 to cover pin YHigh, so I1.I M2 top reaches Y=300.
 func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
-	db, err := pindb.Load("testdata/pins.toml")
+	db, err := celldb.Load("testdata/cells.toml")
 	require.NoError(t, err)
 
 	const m3TrackWidth = 100
@@ -119,7 +119,7 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 }
 
 // Canvas: 1000x1000, trackWidth=100 (10 tracks).
-// Pin coordinates in testdata/pins.toml are chosen so the 4 inv nets
+// Pin coordinates in testdata/cells.toml are chosen so the 4 inv nets
 // land on non-conflicting tracks:
 //
 //	VDD  (sorted first)  → track 6
@@ -127,7 +127,7 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 //	VOUT                 → track 3, different X range (no conflict)
 //	VSS  (sorted last)   → track 1
 func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
-	db, err := pindb.Load("testdata/pins.toml")
+	db, err := celldb.Load("testdata/cells.toml")
 	require.NoError(t, err)
 
 	const m3TrackWidth = 100

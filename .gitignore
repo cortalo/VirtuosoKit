@@ -10,7 +10,7 @@ topology_*.json
 .env
 __pycache__/
 .langgraph_api/
-autorouter/pins.toml
+autorouter/cells.toml
 autorouter/drcs.toml
 autorouter/bin
 autorouter/.claude

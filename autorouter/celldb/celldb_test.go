@@ -1,11 +1,11 @@
-package pindb_test
+package celldb_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"autorouter/pindb"
+	"autorouter/celldb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,29 +32,29 @@ pins = [
 
 func writeTempTOML(t *testing.T, content string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "pins.toml")
+	path := filepath.Join(t.TempDir(), "cells.toml")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 	return path
 }
 
 func TestLoad_ValidFile(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 	assert.NotNil(t, db)
 }
 
 func TestLoad_FileNotFound(t *testing.T) {
-	_, err := pindb.Load("/nonexistent/path/pins.toml")
+	_, err := celldb.Load("/nonexistent/path/cells.toml")
 	assert.Error(t, err)
 }
 
 func TestLoad_InvalidTOML(t *testing.T) {
-	_, err := pindb.Load(writeTempTOML(t, "this is not valid toml ]["))
+	_, err := celldb.Load(writeTempTOML(t, "this is not valid toml ]["))
 	assert.Error(t, err)
 }
 
 func TestQuery_ReturnsCorrectCoordinates(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
 	xLow, xHigh, yLow, yHigh, err := db.Query("tsmc18", "nmos2v", "D")
@@ -66,7 +66,7 @@ func TestQuery_ReturnsCorrectCoordinates(t *testing.T) {
 }
 
 func TestQuery_DifferentLibAndCell(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
 	xLow, xHigh, yLow, yHigh, err := db.Query("other", "cell1", "A")
@@ -78,25 +78,25 @@ func TestQuery_DifferentLibAndCell(t *testing.T) {
 }
 
 func TestQuery_LibNotFound(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
 	_, _, _, _, err = db.Query("unknown", "nmos2v", "D")
-	assert.ErrorIs(t, err, pindb.ErrLibNotFound)
+	assert.ErrorIs(t, err, celldb.ErrLibNotFound)
 }
 
 func TestQuery_CellNotFound(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
 	_, _, _, _, err = db.Query("tsmc18", "unknown", "D")
-	assert.ErrorIs(t, err, pindb.ErrCellNotFound)
+	assert.ErrorIs(t, err, celldb.ErrCellNotFound)
 }
 
 func TestQuery_PinNotFound(t *testing.T) {
-	db, err := pindb.Load(writeTempTOML(t, testTOML))
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
 	_, _, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
-	assert.ErrorIs(t, err, pindb.ErrPinNotFound)
+	assert.ErrorIs(t, err, celldb.ErrPinNotFound)
 }

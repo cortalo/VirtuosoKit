@@ -2,10 +2,10 @@ package main
 
 import (
 	"autorouter/canvas"
+	"autorouter/celldb"
 	"autorouter/common"
 	"autorouter/drcdb"
 	"autorouter/netlist"
-	"autorouter/pindb"
 	"autorouter/router"
 	"autorouter/session"
 	"encoding/json"
@@ -29,17 +29,17 @@ type response struct {
 	Routes []session.NetResult `json:"routes"`
 }
 
-// pinsPath returns the path to pins.toml, expected one directory above the binary
+// cellsPath returns the path to cells.toml, expected one directory above the binary
 // (i.e. the module root when the binary lives in bin/).
-func pinsPath() (string, error) {
+func cellsPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("resolve executable: %w", err)
 	}
-	return filepath.Join(filepath.Dir(exe), "..", "pins.toml"), nil
+	return filepath.Join(filepath.Dir(exe), "..", "cells.toml"), nil
 }
 
-// drcsPath returns the path to drcs.toml, next to pins.toml.
+// drcsPath returns the path to drcs.toml, next to cells.toml.
 func drcsPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
@@ -122,14 +122,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: could not load drcs.toml: %v, DRC rules disabled\n", loadErr)
 	}
 
-	pinPath, err := pinsPath()
+	cellsP, err := cellsPath()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
-	db, err := pindb.Load(pinPath)
+	db, err := celldb.Load(cellsP)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: load pins.toml: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: load cells.toml: %v\n", err)
 		os.Exit(1)
 	}
 

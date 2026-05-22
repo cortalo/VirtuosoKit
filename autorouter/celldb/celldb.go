@@ -1,4 +1,4 @@
-package pindb
+package celldb
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ type DB struct {
 func Load(path string) (*DB, error) {
 	var raw map[string]map[string]cell
 	if _, err := toml.DecodeFile(path, &raw); err != nil {
-		return nil, fmt.Errorf("pindb: %w", err)
+		return nil, fmt.Errorf("celldb: %w", err)
 	}
 	return &DB{libs: raw}, nil
 }
