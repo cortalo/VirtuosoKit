@@ -158,9 +158,13 @@ func (s *Session) appendViaCuts(shapes []Shape, a, b Shape) []Shape {
 }
 
 func pinBBox(pin RoutingPin) Shape {
+	layer := pin.Layer
+	if layer == 0 {
+		layer = common.M1
+	}
 	return Shape{
 		LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 		UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
-		Layer:      common.M1,
+		Layer:      layer,
 	}
 }

@@ -156,7 +156,13 @@ func (r *FullTrackRouter) tryTrack(
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
 			}
-			m2Start, m2End := r.m2DRC.ApplyEndExtension(min(pinAlong0, m3Lower), max(pinAlong1, m3Upper))
+			rangeStart, rangeEnd := min(pinAlong0, m3Lower), max(pinAlong1, m3Upper)
+			var m2Start, m2End int
+			if pin.Layer == common.M2 {
+				m2Start, m2End = rangeStart, rangeEnd
+			} else {
+				m2Start, m2End = r.m2DRC.ApplyEndExtension(rangeStart, rangeEnd)
+			}
 			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
 			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
 				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||
@@ -199,7 +205,12 @@ func (r *FullTrackRouter) tryTrack(
 				connStart = min(connStart, plo)
 				connEnd = max(connEnd, phi)
 			}
-			m2Start, m2End := r.m2DRC.ApplyEndExtension(plo, phi)
+			var m2Start, m2End int
+			if pin.Layer == common.M2 {
+				m2Start, m2End = plo, phi
+			} else {
+				m2Start, m2End = r.m2DRC.ApplyEndExtension(plo, phi)
+			}
 			m2, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
 			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
 				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||

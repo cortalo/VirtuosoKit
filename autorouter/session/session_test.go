@@ -243,3 +243,34 @@ func TestRoute_ViaCut_NetIDMatchesNet(t *testing.T) {
 		assert.Equal(t, 1, via.NetID, "via cut NetID must match net ID, not 0")
 	}
 }
+
+func TestRoute_M2Pin_NoViaCut(t *testing.T) {
+	// M2 segment and M2-layer pin overlap → no Via12 cut should be placed.
+	m2 := seg(0, 0, 10, 300, 1)
+	r := &mockRouter{results: []routeResult{{segs: []Segment{m2}}}}
+	canvas := &mockCanvas{}
+	via12 := common.ViaConfig{CutW: 5, CutH: 5, SpaceX: 1, SpaceY: 1}
+
+	net := &Net{
+		ID: 1,
+		Pins: []RoutingPin{
+			{Layer: common.M2, XLow: 0, XHigh: 10, YLow: 100, YHigh: 200},
+		},
+	}
+	s := &Session{
+		canvas:  canvas,
+		router:  r,
+		netlist: &Netlist{Nets: []*Net{net}},
+		via12:   via12,
+		m2DRC:   common.NoDRC{},
+		m3DRC:   common.NoDRC{},
+	}
+
+	results := s.Route()
+
+	require.Len(t, results, 1)
+	require.NoError(t, results[0].Err)
+	for _, sh := range results[0].Shapes {
+		assert.NotEqual(t, common.Via12, sh.Layer, "M2-layer pin must not produce Via12 cuts")
+	}
+}

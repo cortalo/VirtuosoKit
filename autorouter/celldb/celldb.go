@@ -1,6 +1,7 @@
 package celldb
 
 import (
+	"autorouter/common"
 	"errors"
 	"fmt"
 
@@ -14,9 +15,10 @@ var (
 )
 
 type Pin struct {
-	Name string `toml:"name"`
-	LL   [2]int `toml:"ll"`
-	UR   [2]int `toml:"ur"`
+	Name  string `toml:"name"`
+	Layer string `toml:"layer"` // "M1", "M2", etc.; absent means M1
+	LL    [2]int `toml:"ll"`
+	UR    [2]int `toml:"ur"`
 }
 
 type Metal struct {
@@ -54,19 +56,28 @@ func (db *DB) QueryMetals(lib, cellName string) ([]Metal, error) {
 	return c.Metals, nil
 }
 
-func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh int, err error) {
+func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error) {
 	cells, ok := db.libs[lib]
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+		err = fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+		return
 	}
 	c, ok := cells[cellName]
 	if !ok {
-		return 0, 0, 0, 0, fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
+		err = fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
+		return
 	}
 	for _, p := range c.Pins {
 		if p.Name == pinName {
-			return p.LL[0], p.UR[0], p.LL[1], p.UR[1], nil
+			xLow, xHigh, yLow, yHigh = p.LL[0], p.UR[0], p.LL[1], p.UR[1]
+			if p.Layer == "" {
+				layer = common.M1
+			} else {
+				layer, err = common.ParseLayer(p.Layer)
+			}
+			return
 		}
 	}
-	return 0, 0, 0, 0, fmt.Errorf("%w: %s", ErrPinNotFound, pinName)
+	err = fmt.Errorf("%w: %s", ErrPinNotFound, pinName)
+	return
 }

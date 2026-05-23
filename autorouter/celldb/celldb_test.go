@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"autorouter/celldb"
+	"autorouter/common"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,7 @@ pins = [
   { name = "D", ll = [10, 20], ur = [30, 50] },
   { name = "G", ll = [30, 40], ur = [50, 70] },
   { name = "S", ll = [50, 60], ur = [70, 90] },
+  { name = "M2PIN", layer = "M2", ll = [100, 0], ur = [200, 400] },
 ]
 
 [tsmc18.pmos2v]
@@ -72,7 +74,7 @@ func TestQuery_ReturnsCorrectCoordinates(t *testing.T) {
 	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	xLow, xHigh, yLow, yHigh, err := db.Query("tsmc18", "nmos2v", "D")
+	xLow, xHigh, yLow, yHigh, _, err := db.Query("tsmc18", "nmos2v", "D")
 	require.NoError(t, err)
 	assert.Equal(t, 10, xLow)
 	assert.Equal(t, 30, xHigh)
@@ -84,7 +86,7 @@ func TestQuery_DifferentLibAndCell(t *testing.T) {
 	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	xLow, xHigh, yLow, yHigh, err := db.Query("other", "cell1", "A")
+	xLow, xHigh, yLow, yHigh, _, err := db.Query("other", "cell1", "A")
 	require.NoError(t, err)
 	assert.Equal(t, 1, xLow)
 	assert.Equal(t, 3, xHigh)
@@ -96,7 +98,7 @@ func TestQuery_LibNotFound(t *testing.T) {
 	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, _, err = db.Query("unknown", "nmos2v", "D")
+	_, _, _, _, _, err = db.Query("unknown", "nmos2v", "D")
 	assert.ErrorIs(t, err, celldb.ErrLibNotFound)
 }
 
@@ -104,7 +106,7 @@ func TestQuery_CellNotFound(t *testing.T) {
 	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, _, err = db.Query("tsmc18", "unknown", "D")
+	_, _, _, _, _, err = db.Query("tsmc18", "unknown", "D")
 	assert.ErrorIs(t, err, celldb.ErrCellNotFound)
 }
 
@@ -112,8 +114,30 @@ func TestQuery_PinNotFound(t *testing.T) {
 	db, err := celldb.Load(writeTempTOML(t, testTOML))
 	require.NoError(t, err)
 
-	_, _, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
+	_, _, _, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
 	assert.ErrorIs(t, err, celldb.ErrPinNotFound)
+}
+
+func TestQuery_DefaultLayerIsM1(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	_, _, _, _, layer, err := db.Query("tsmc18", "nmos2v", "D")
+	require.NoError(t, err)
+	assert.Equal(t, common.M1, layer)
+}
+
+func TestQuery_M2LayerPin(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	xLow, xHigh, yLow, yHigh, layer, err := db.Query("tsmc18", "nmos2v", "M2PIN")
+	require.NoError(t, err)
+	assert.Equal(t, common.M2, layer)
+	assert.Equal(t, 100, xLow)
+	assert.Equal(t, 200, xHigh)
+	assert.Equal(t, 0, yLow)
+	assert.Equal(t, 400, yHigh)
 }
 
 // --- QueryMetals ---

@@ -222,6 +222,7 @@ func (ts TrackSegment) GetArea() int { return (ts.End - ts.Start) * ts.Width }
 // Name is non-empty only for top-level schematic pins (ports of the cell being designed).
 type RoutingPin struct {
 	Name  string
+	Layer Layer // pin metal layer; zero value treated as M1
 	XLow  int
 	XHigh int
 	YLow  int

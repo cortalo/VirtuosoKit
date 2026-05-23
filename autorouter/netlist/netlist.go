@@ -111,7 +111,7 @@ func expandSchematicInstances(instances []SchematicInstance) []SchematicInstance
 }
 
 type PinDB interface {
-	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, err error)
+	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error)
 }
 
 // Layout mirrors the layout JSON structure.
@@ -263,7 +263,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			if _, skip := ignoredLibs[inst.Lib]; skip {
 				continue
 			}
-			xLow, xHigh, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
 				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
 				return
@@ -272,6 +272,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			instY := int(math.Round(inst.XY[1] * 1000))
 			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 			pins = append(pins, common.RoutingPin{
+				Layer: pinLayer,
 				XLow:  instX + txLow,
 				XHigh: instX + txHigh,
 				YLow:  instY + tyLow,
@@ -314,7 +315,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 				err = fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
 				return
 			}
-			xLow, xHigh, yLow, yHigh, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
 				err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
 				return
@@ -324,6 +325,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 			layoutPins = append(layoutPins, &common.RoutingPin{
 				Name:  name,
+				Layer: pinLayer,
 				XLow:  instX + txLow,
 				XHigh: instX + txHigh,
 				YLow:  instY + tyLow,

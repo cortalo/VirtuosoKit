@@ -298,6 +298,48 @@ func TestFTRoute_HorizontalM2Dir_WrongM3Track(t *testing.T) {
 	assert.Equal(t, 1000, m3Seg.UpperRight.Y, "M3 should end at Y=1000 (M2 track 9)")
 }
 
+// --- M2-layer RoutingPin ---
+
+// An M2-layer pin should not have ApplyEndExtension applied.
+// Canvas 1000x1000, m2tw=100, m3tw=100, NoDRC (no-op end extension).
+// Pin1: M1 at X=[0,100] Y=[100,200]  → M2 track 0.
+// Pin2: M2 at X=[500,600] Y=[100,200] → M2 track 5.
+// With NoDRC both behave the same — test just verifies routing succeeds and
+// produces the expected M2 segments with no panics or errors.
+func TestFTRoute_M2LayerPin_RoutesSuccessfully(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := newFTRouter(c)
+
+	pins := []common.RoutingPin{
+		{Layer: common.M1, XLow: 0, XHigh: 100, YLow: 100, YHigh: 200},
+		{Layer: common.M2, XLow: 500, XHigh: 600, YLow: 100, YHigh: 200},
+	}
+	segs, err := r.Route(pins, 1)
+
+	require.NoError(t, err)
+	require.Len(t, segs, 3, "one M2 per pin plus one M3")
+	assert.Equal(t, common.M2, segs[0].Layer)
+	assert.Equal(t, common.M2, segs[1].Layer)
+	assert.Equal(t, common.M3, segs[2].Layer)
+}
+
+// All-same-M2-track path with an M2-layer pin: no M3, just per-pin M2s + connector.
+func TestFTRoute_M2LayerPin_SameTrack(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := newFTRouter(c)
+
+	// Both pins on M2 track 3 (X=[300,400]).
+	pins := []common.RoutingPin{
+		{Layer: common.M1, XLow: 300, XHigh: 400, YLow: 100, YHigh: 200},
+		{Layer: common.M2, XLow: 300, XHigh: 400, YLow: 600, YHigh: 700},
+	}
+	segs, err := r.Route(pins, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, -1, m3Track(segs, 100), "no M3 when all pins on same M2 track")
+	require.Len(t, segs, 3, "one M2 per pin plus connector")
+}
+
 // Route returns len(pins)+1 segments: one M2 per pin plus one M3.
 func TestFTRoute_ResultShape_TwoPins(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
