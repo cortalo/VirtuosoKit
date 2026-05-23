@@ -111,6 +111,48 @@ func TestFTIntegration_TwoNets_ConflictAvoidance(t *testing.T) {
 	assert.NotEqual(t, track1, track2, "nets must use different M3 tracks")
 }
 
+// --- instance metals block routing ---
+
+// Instance metal covers M3 track 4 (Y=[400,500]).
+// Net midY=400 → ideal track 4, but it's occupied by instance metal (netID=-1).
+// Adjacent tracks 3 and 5 are also blocked. Router should land on track 6.
+func TestFTIntegration_InstanceMetal_BlocksM3Track(t *testing.T) {
+	inst := canvas.Instance{
+		XY:     common.Point{X: 0, Y: 0},
+		Orient: canvas.R0,
+		Metals: []common.Shape{{
+			LowerLeft:  common.Point{X: 0, Y: 400},
+			UpperRight: common.Point{X: 1000, Y: 500},
+			Layer:      common.M3,
+		}},
+	}
+	c, err := canvas.NewFullTrackCanvas(
+		common.Point{X: 0, Y: 0},
+		common.Point{X: 1000, Y: 1000},
+		canvas.NewTrackSegmentStorage(10, 100),
+		canvas.NewTrackSegmentStorage(10, 100),
+		common.Vertical,
+		[]canvas.Instance{inst},
+	)
+	require.NoError(t, err)
+
+	r := router.NewFullTrackRouter(c, common.Vertical, common.NoDRC{}, common.NoDRC{})
+	nl := &common.Netlist{Nets: []*common.Net{{
+		ID: 1,
+		Pins: []common.RoutingPin{
+			{XLow: 0, XHigh: 100, YLow: 100, YHigh: 200},
+			{XLow: 900, XHigh: 1000, YLow: 700, YHigh: 800},
+		},
+	}}}
+	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+
+	results := s.Route()
+
+	require.Len(t, results, 1)
+	require.NoError(t, results[0].Err)
+	assert.Equal(t, 6, ftTrackID(results[0], 100), "track 4 blocked by instance metal → routed on track 6")
+}
+
 // --- all M3 tracks blocked → second net fails ---
 
 // Net1 fills track 4. Then pre-occupy all remaining M3 tracks via a dummy routing session.

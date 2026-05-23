@@ -3,6 +3,10 @@ pins = [
   { name = "I",   ll = [100, 100], ur = [200, 300] },
   { name = "ZN",  ll = [800, 100], ur = [900, 300] },
 ]
+metals = [
+  { layer = "M2", ll = [100,   0], ur = [200, 400] },
+  { layer = "M2", ll = [800,   0], ur = [900, 400] },
+]
 
 [tsmc18.nmos2v]
 pins = [

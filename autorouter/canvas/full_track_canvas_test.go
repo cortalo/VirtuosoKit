@@ -199,6 +199,181 @@ func TestFTC_IsOccupiedM3_DifferentTrack_NotOccupied(t *testing.T) {
 	assert.False(t, c.IsOccupied(mkM3Seg(1, 100, 500, 2)))
 }
 
+// --- ParseOrient ---
+
+func TestParseOrient_AllValidOrients(t *testing.T) {
+	cases := []struct {
+		s    string
+		want Orient
+	}{
+		{"R0", R0},
+		{"R90", R90},
+		{"R180", R180},
+		{"R270", R270},
+		{"MX", MX},
+		{"MY", MY},
+		{"MXR90", MXR90},
+		{"MYR90", MYR90},
+	}
+	for _, tc := range cases {
+		got, err := ParseOrient(tc.s)
+		require.NoError(t, err, tc.s)
+		assert.Equal(t, tc.want, got, tc.s)
+	}
+}
+
+func TestParseOrient_Unknown_ReturnsError(t *testing.T) {
+	_, err := ParseOrient("R45")
+	assert.Error(t, err)
+}
+
+// --- AbsoluteMetals ---
+
+// baseShape is a cell-relative M2 rectangle used across orient tests.
+// xLow=10 xHigh=30 yLow=20 yHigh=40, instance origin at (100,200).
+func baseInstance(o Orient) Instance {
+	return Instance{
+		XY:     Point{100, 200},
+		Orient: o,
+		Metals: []common.Shape{{
+			LowerLeft:  Point{10, 20},
+			UpperRight: Point{30, 40},
+			Layer:      common.M2,
+		}},
+	}
+}
+
+func TestAbsoluteMetals_R0(t *testing.T) {
+	s := baseInstance(R0).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{110, 220}, s[0].LowerLeft)
+	assert.Equal(t, Point{130, 240}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_R90(t *testing.T) {
+	// (x,y)→(-y,x): xLow=-40 xHigh=-20 yLow=10 yHigh=30 + origin
+	s := baseInstance(R90).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{60, 210}, s[0].LowerLeft)
+	assert.Equal(t, Point{80, 230}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_R180(t *testing.T) {
+	// (x,y)→(-x,-y): xLow=-30 xHigh=-10 yLow=-40 yHigh=-20 + origin
+	s := baseInstance(R180).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{70, 160}, s[0].LowerLeft)
+	assert.Equal(t, Point{90, 180}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_R270(t *testing.T) {
+	// (x,y)→(y,-x): xLow=20 xHigh=40 yLow=-30 yHigh=-10 + origin
+	s := baseInstance(R270).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{120, 170}, s[0].LowerLeft)
+	assert.Equal(t, Point{140, 190}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_MX(t *testing.T) {
+	// (x,y)→(x,-y): xLow=10 xHigh=30 yLow=-40 yHigh=-20 + origin
+	s := baseInstance(MX).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{110, 160}, s[0].LowerLeft)
+	assert.Equal(t, Point{130, 180}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_MY(t *testing.T) {
+	// (x,y)→(-x,y): xLow=-30 xHigh=-10 yLow=20 yHigh=40 + origin
+	s := baseInstance(MY).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{70, 220}, s[0].LowerLeft)
+	assert.Equal(t, Point{90, 240}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_MXR90(t *testing.T) {
+	// (x,y)→(y,x): xLow=20 xHigh=40 yLow=10 yHigh=30 + origin
+	s := baseInstance(MXR90).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{120, 210}, s[0].LowerLeft)
+	assert.Equal(t, Point{140, 230}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_MYR90(t *testing.T) {
+	// (x,y)→(-y,-x): xLow=-40 xHigh=-20 yLow=-30 yHigh=-10 + origin
+	s := baseInstance(MYR90).AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, Point{60, 170}, s[0].LowerLeft)
+	assert.Equal(t, Point{80, 190}, s[0].UpperRight)
+}
+
+func TestAbsoluteMetals_LayerPreserved(t *testing.T) {
+	inst := Instance{
+		XY:     Point{0, 0},
+		Orient: R0,
+		Metals: []common.Shape{{LowerLeft: Point{0, 0}, UpperRight: Point{10, 10}, Layer: common.M3}},
+	}
+	s := inst.AbsoluteMetals()
+	require.Len(t, s, 1)
+	assert.Equal(t, common.M3, s[0].Layer)
+}
+
+func TestAbsoluteMetals_Empty(t *testing.T) {
+	inst := Instance{XY: Point{0, 0}, Orient: R0}
+	assert.Empty(t, inst.AbsoluteMetals())
+}
+
+// --- NewFullTrackCanvas ---
+
+func newFTCInstances(instances []Instance) (*FullTrackCanvas, error) {
+	return NewFullTrackCanvas(
+		Point{0, 0}, Point{1000, 1000},
+		NewTrackSegmentStorage(100, 10),
+		NewTrackSegmentStorage(10, 100),
+		common.Vertical,
+		instances,
+	)
+}
+
+func TestNewFullTrackCanvas_NoInstances_Empty(t *testing.T) {
+	c, err := newFTCInstances(nil)
+	require.NoError(t, err)
+	assert.True(t, c.IsPassible(mkFTM2Seg(5, 0, 1000, 1)))
+}
+
+func TestNewFullTrackCanvas_M2Instance_TracksOccupied(t *testing.T) {
+	// M2 is vertical width=10; shape at x=[50,60] lands on track 5.
+	inst := Instance{
+		XY:     Point{0, 0},
+		Orient: R0,
+		Metals: []common.Shape{{
+			LowerLeft:  Point{50, 0},
+			UpperRight: Point{60, 1000},
+			Layer:      common.M2,
+		}},
+	}
+	c, err := newFTCInstances([]Instance{inst})
+	require.NoError(t, err)
+	assert.False(t, c.IsPassible(mkFTM2Seg(5, 0, 500, 1)))
+	assert.True(t, c.IsPassible(mkFTM2Seg(4, 0, 500, 1)))
+}
+
+func TestNewFullTrackCanvas_M3Instance_TrackOccupied(t *testing.T) {
+	// M3 is horizontal width=100; shape at y=[300,400] lands on track 3.
+	inst := Instance{
+		XY:     Point{0, 0},
+		Orient: R0,
+		Metals: []common.Shape{{
+			LowerLeft:  Point{0, 300},
+			UpperRight: Point{1000, 400},
+			Layer:      common.M3,
+		}},
+	}
+	c, err := newFTCInstances([]Instance{inst})
+	require.NoError(t, err)
+	assert.False(t, c.IsPassible(mkM3Seg(3, 0, 500, 1)))
+	assert.True(t, c.IsPassible(mkM3Seg(2, 0, 500, 1)))
+}
+
 // --- NewTrack ---
 
 func TestFTC_NewTrackM2_Basic(t *testing.T) {

@@ -2,9 +2,114 @@ package canvas
 
 import (
 	"autorouter/common"
+	"fmt"
 
 	"github.com/samber/lo"
 )
+
+type Orient int
+
+const (
+	R0 Orient = iota
+	R90
+	R180
+	R270
+	MX
+	MY
+	MXR90
+	MYR90
+)
+
+func ParseOrient(s string) (Orient, error) {
+	switch s {
+	case "R0":
+		return R0, nil
+	case "R90":
+		return R90, nil
+	case "R180":
+		return R180, nil
+	case "R270":
+		return R270, nil
+	case "MX":
+		return MX, nil
+	case "MY":
+		return MY, nil
+	case "MXR90":
+		return MXR90, nil
+	case "MYR90":
+		return MYR90, nil
+	default:
+		return 0, fmt.Errorf("unknown orient: %q", s)
+	}
+}
+
+type Instance struct {
+	XY     Point
+	Orient Orient
+	Metals []common.Shape // cell-relative coordinates
+}
+
+func (inst Instance) AbsoluteMetals() []common.Shape {
+	result := make([]common.Shape, len(inst.Metals))
+	for i, m := range inst.Metals {
+		xLow, xHigh := m.LowerLeft.X, m.UpperRight.X
+		yLow, yHigh := m.LowerLeft.Y, m.UpperRight.Y
+		var txLow, txHigh, tyLow, tyHigh int
+		switch inst.Orient {
+		case R90: // (x,y) → (-y, x)
+			txLow, txHigh, tyLow, tyHigh = -yHigh, -yLow, xLow, xHigh
+		case R180: // (x,y) → (-x,-y)
+			txLow, txHigh, tyLow, tyHigh = -xHigh, -xLow, -yHigh, -yLow
+		case R270: // (x,y) → (y,-x)
+			txLow, txHigh, tyLow, tyHigh = yLow, yHigh, -xHigh, -xLow
+		case MX: // (x,y) → (x,-y)
+			txLow, txHigh, tyLow, tyHigh = xLow, xHigh, -yHigh, -yLow
+		case MY: // (x,y) → (-x,y)
+			txLow, txHigh, tyLow, tyHigh = -xHigh, -xLow, yLow, yHigh
+		case MXR90: // (x,y) → (y,x)
+			txLow, txHigh, tyLow, tyHigh = yLow, yHigh, xLow, xHigh
+		case MYR90: // (x,y) → (-y,-x)
+			txLow, txHigh, tyLow, tyHigh = -yHigh, -yLow, -xHigh, -xLow
+		case R0:
+			txLow, txHigh, tyLow, tyHigh = xLow, xHigh, yLow, yHigh
+		default:
+			panic("unknown orient")
+		}
+		result[i] = common.Shape{
+			LowerLeft:  Point{X: inst.XY.X + txLow, Y: inst.XY.Y + tyLow},
+			UpperRight: Point{X: inst.XY.X + txHigh, Y: inst.XY.Y + tyHigh},
+			Layer:      m.Layer,
+		}
+	}
+	return result
+}
+
+func NewFullTrackCanvas(
+	lowerLeft, upperRight Point,
+	m2Storage, m3Storage TrackSegmentStorage,
+	m2Dir common.Direction,
+	instances []Instance,
+) (*FullTrackCanvas, error) {
+	c := &FullTrackCanvas{
+		LowerLeft:  lowerLeft,
+		UpperRight: upperRight,
+		M2Storage:  m2Storage,
+		M3Storage:  m3Storage,
+		M2Dir:      m2Dir,
+	}
+	for _, inst := range instances {
+		for _, shape := range inst.AbsoluteMetals() {
+			seg, err := c.NewSeg(shape.Layer, shape.LowerLeft, shape.UpperRight, -1)
+			if err != nil {
+				return nil, err
+			}
+			if err := c.Occupy(seg); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return c, nil
+}
 
 type FullTrackCanvas struct {
 	LowerLeft  Point
@@ -54,7 +159,11 @@ func (c *FullTrackCanvas) IsOccupied(seg Segment) bool {
 
 func (c *FullTrackCanvas) Occupy(seg Segment) error {
 	st := c.storageFor(seg.Layer)
-	return st.Occupy(lo.Must(seg.ToTrack(st.GetTrackWidth())))
+	ts, err := seg.ToTrack(st.GetTrackWidth())
+	if err != nil {
+		return err
+	}
+	return st.Occupy(ts)
 }
 
 func (c *FullTrackCanvas) NewTrack(layer common.Layer, trackID, start, end, netID int) (TrackSegment, error) {

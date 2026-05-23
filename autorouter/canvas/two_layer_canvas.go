@@ -45,9 +45,12 @@ func (c *TwoLayerCanvas) Occupy(seg Segment) error {
 	case common.M2:
 		return c.M2Storage.Occupy(seg)
 	case common.M3:
-		return c.M3Storage.Occupy(lo.Must(seg.ToTrack(c.M3Storage.GetTrackWidth())))
+		ts, err := seg.ToTrack(c.M3Storage.GetTrackWidth())
+		if err != nil {
+			return err
+		}
+		return c.M3Storage.Occupy(ts)
 	default:
-		panic(ErrUnknownLayer)
 		return ErrUnknownLayer
 	}
 }

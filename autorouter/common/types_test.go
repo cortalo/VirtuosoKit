@@ -19,6 +19,31 @@ func testCanvas() *canvas.TwoLayerCanvas {
 	}
 }
 
+// --- ParseLayer ---
+
+func TestParseLayer_AllValidLayers(t *testing.T) {
+	cases := []struct {
+		s    string
+		want common.Layer
+	}{
+		{"M1", common.M1},
+		{"M2", common.M2},
+		{"M3", common.M3},
+		{"Via12", common.Via12},
+		{"Via23", common.Via23},
+	}
+	for _, tc := range cases {
+		got, err := common.ParseLayer(tc.s)
+		require.NoError(t, err, tc.s)
+		assert.Equal(t, tc.want, got, tc.s)
+	}
+}
+
+func TestParseLayer_Unknown_ReturnsError(t *testing.T) {
+	_, err := common.ParseLayer("M4")
+	assert.Error(t, err)
+}
+
 // --- ToTrack ---
 
 func TestToTrack_HorizontalM3_CorrectTrackID(t *testing.T) {

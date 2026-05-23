@@ -28,6 +28,21 @@ pins = [
 pins = [
   { name = "A", ll = [1, 2], ur = [3, 4] },
 ]
+
+[other.cell2]
+pins = [
+  { name = "A", ll = [1, 2], ur = [3, 4] },
+]
+metals = [
+  { layer = "M2", ll = [10, 0], ur = [20, 100] },
+  { layer = "M3", ll = [0, 50], ur = [200, 60] },
+]
+
+[other.cell3]
+pins = [
+  { name = "A", ll = [1, 2], ur = [3, 4] },
+]
+metals = []
 `
 
 func writeTempTOML(t *testing.T, content string) string {
@@ -99,4 +114,53 @@ func TestQuery_PinNotFound(t *testing.T) {
 
 	_, _, _, _, err = db.Query("tsmc18", "nmos2v", "Z")
 	assert.ErrorIs(t, err, celldb.ErrPinNotFound)
+}
+
+// --- QueryMetals ---
+
+func TestQueryMetals_ReturnsMetals(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	metals, err := db.QueryMetals("other", "cell2")
+	require.NoError(t, err)
+	require.Len(t, metals, 2)
+	assert.Equal(t, "M2", metals[0].Layer)
+	assert.Equal(t, [2]int{10, 0}, metals[0].LL)
+	assert.Equal(t, [2]int{20, 100}, metals[0].UR)
+	assert.Equal(t, "M3", metals[1].Layer)
+}
+
+func TestQueryMetals_NoMetalsField_ReturnsEmpty(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	metals, err := db.QueryMetals("tsmc18", "nmos2v")
+	require.NoError(t, err)
+	assert.Empty(t, metals)
+}
+
+func TestQueryMetals_EmptyMetalsField_ReturnsEmpty(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	metals, err := db.QueryMetals("other", "cell3")
+	require.NoError(t, err)
+	assert.Empty(t, metals)
+}
+
+func TestQueryMetals_LibNotFound(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	_, err = db.QueryMetals("unknown", "cell2")
+	assert.ErrorIs(t, err, celldb.ErrLibNotFound)
+}
+
+func TestQueryMetals_CellNotFound(t *testing.T) {
+	db, err := celldb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	_, err = db.QueryMetals("other", "unknown")
+	assert.ErrorIs(t, err, celldb.ErrCellNotFound)
 }

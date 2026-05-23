@@ -44,25 +44,33 @@ func (l Layer) MarshalJSON() ([]byte, error) {
 	}
 }
 
+func ParseLayer(s string) (Layer, error) {
+	switch s {
+	case "M1":
+		return M1, nil
+	case "M2":
+		return M2, nil
+	case "M3":
+		return M3, nil
+	case "Via12":
+		return Via12, nil
+	case "Via23":
+		return Via23, nil
+	default:
+		return 0, fmt.Errorf("unknown layer: %q", s)
+	}
+}
+
 func (l *Layer) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	switch s {
-	case "M1":
-		*l = M1
-	case "M2":
-		*l = M2
-	case "M3":
-		*l = M3
-	case "Via12":
-		*l = Via12
-	case "Via23":
-		*l = Via23
-	default:
-		return fmt.Errorf("unknown layer: %q", s)
+	layer, err := ParseLayer(s)
+	if err != nil {
+		return err
 	}
+	*l = layer
 	return nil
 }
 

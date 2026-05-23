@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -81,6 +82,46 @@ func (f *ignoreNetFlag) String() string { return strings.Join(*f, ",") }
 func (f *ignoreNetFlag) Set(v string) error {
 	*f = append(*f, v)
 	return nil
+}
+
+// buildCanvasInstances converts layout instances to canvas.Instance values by
+// looking up each cell's pre-existing metals in celldb. Instances whose cell
+// has no metals entry are silently skipped.
+func buildCanvasInstances(instances []netlist.LayoutInstance, db *celldb.DB) []canvas.Instance {
+	var result []canvas.Instance
+	for _, inst := range instances {
+		metals, err := db.QueryMetals(inst.Lib, inst.Cell)
+		if err != nil || len(metals) == 0 {
+			continue
+		}
+		orient, err := canvas.ParseOrient(strings.Trim(inst.Orient, "\""))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: instance %s: %v, skipping metals\n", inst.Name, err)
+			continue
+		}
+		shapes := make([]common.Shape, 0, len(metals))
+		for _, m := range metals {
+			layer, err := common.ParseLayer(m.Layer)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: instance %s metal layer %q: %v, skipping\n", inst.Name, m.Layer, err)
+				continue
+			}
+			shapes = append(shapes, common.Shape{
+				LowerLeft:  common.Point{X: m.LL[0], Y: m.LL[1]},
+				UpperRight: common.Point{X: m.UR[0], Y: m.UR[1]},
+				Layer:      layer,
+			})
+		}
+		if len(shapes) == 0 {
+			continue
+		}
+		result = append(result, canvas.Instance{
+			XY:     common.Point{X: int(math.Round(inst.XY[0] * 1000)), Y: int(math.Round(inst.XY[1] * 1000))},
+			Orient: orient,
+			Metals: shapes,
+		})
+	}
+	return result
 }
 
 func parseDir(s string) common.Direction {
@@ -168,17 +209,23 @@ func main() {
 	case "full-track":
 		m2TrackCount := (ur.X - ll.X) / *m2TrackWidth
 		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
-		ftc := &canvas.FullTrackCanvas{
-			LowerLeft:  ll,
-			UpperRight: ur,
-			M2Storage:  canvas.NewTrackSegmentStorage(m2TrackCount, *m2TrackWidth),
-			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
-			M2Dir:      parseDir(*m2Dir),
+		canvasInsts := buildCanvasInstances(req.Layout.Instances, db)
+		dir := parseDir(*m2Dir)
+		ftc, err := canvas.NewFullTrackCanvas(
+			ll, ur,
+			canvas.NewTrackSegmentStorage(m2TrackCount, *m2TrackWidth),
+			canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
+			dir,
+			canvasInsts,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: build canvas: %v\n", err)
+			os.Exit(1)
 		}
-		c, r = ftc, router.NewFullTrackRouter(ftc, parseDir(*m2Dir), m2DRC, m3DRC)
+		c, r = ftc, router.NewFullTrackRouter(ftc, dir, m2DRC, m3DRC)
 		if *verbose {
-			fmt.Fprintf(os.Stderr, "mode: full-track  m2-tracks=%d m3-tracks=%d m2-dir=%s\n",
-				m2TrackCount, m3TrackCount, *m2Dir)
+			fmt.Fprintf(os.Stderr, "mode: full-track  m2-tracks=%d m3-tracks=%d m2-dir=%s instances=%d\n",
+				m2TrackCount, m3TrackCount, *m2Dir, len(canvasInsts))
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "error: unknown --mode %q (use classic or full-track)\n", *mode)

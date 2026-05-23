@@ -19,8 +19,15 @@ type Pin struct {
 	UR   [2]int `toml:"ur"`
 }
 
+type Metal struct {
+	Layer string `toml:"layer"` // "M1", "M2", "M3"
+	LL    [2]int `toml:"ll"`
+	UR    [2]int `toml:"ur"`
+}
+
 type cell struct {
-	Pins []Pin `toml:"pins"`
+	Pins   []Pin   `toml:"pins"`
+	Metals []Metal `toml:"metals"`
 }
 
 type DB struct {
@@ -33,6 +40,18 @@ func Load(path string) (*DB, error) {
 		return nil, fmt.Errorf("celldb: %w", err)
 	}
 	return &DB{libs: raw}, nil
+}
+
+func (db *DB) QueryMetals(lib, cellName string) ([]Metal, error) {
+	cells, ok := db.libs[lib]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+	}
+	c, ok := cells[cellName]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
+	}
+	return c.Metals, nil
 }
 
 func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh int, err error) {
