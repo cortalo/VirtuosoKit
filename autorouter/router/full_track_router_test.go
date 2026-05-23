@@ -173,7 +173,7 @@ func TestFTRoute_IntraPinAdjacentM2_UsesNonAdjacentTrack(t *testing.T) {
 }
 
 // Both pins span X=[0,100] with m2tw=100 → both land on M2 track 0.
-// No M3 is needed; the router should return one M2 per pin (no merged segment).
+// No M3 is needed; the router returns one M2 per pin plus one full-range M2 connector.
 func TestFTRoute_SameM2Track_NoM3(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 100, 100)
 	r := newFTRouter(c)
@@ -185,15 +185,48 @@ func TestFTRoute_SameM2Track_NoM3(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, -1, m3Track(segs, 100), "no M3 when all pins on same M2 track")
-	require.Len(t, segs, 2, "one M2 per pin, no M3")
+	require.Len(t, segs, 3, "one M2 per pin plus one full-range connector, no M3")
 	assert.Equal(t, common.M2, segs[0].Layer)
 	assert.Equal(t, common.M2, segs[1].Layer)
+	assert.Equal(t, common.M2, segs[2].Layer)
 	// pin0 M2 covers its own Y range
 	assert.Equal(t, 100, segs[0].LowerLeft.Y)
 	assert.Equal(t, 200, segs[0].UpperRight.Y)
 	// pin1 M2 covers its own Y range
 	assert.Equal(t, 500, segs[1].LowerLeft.Y)
 	assert.Equal(t, 600, segs[1].UpperRight.Y)
+	// connector M2 spans full range, no DRC extension
+	assert.Equal(t, 0, segs[2].LowerLeft.X, "connector on same M2 track 0")
+	assert.Equal(t, 100, segs[2].UpperRight.X)
+	assert.Equal(t, 100, segs[2].LowerLeft.Y, "connector starts at min pin start")
+	assert.Equal(t, 600, segs[2].UpperRight.Y, "connector ends at max pin end")
+}
+
+// Three pins all on the same M2 track; connector must span the full extent.
+// Pin0: Y=[50,150], Pin1: Y=[300,400], Pin2: Y=[700,800] → connector Y=[50,800].
+func TestFTRoute_SameM2Track_ThreePins_ConnectorSpansAll(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := newFTRouter(c)
+
+	segs, err := r.Route(ftPins(
+		[4]int{0, 100, 50, 150},
+		[4]int{0, 100, 300, 400},
+		[4]int{0, 100, 700, 800},
+	), 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, -1, m3Track(segs, 100), "no M3 when all pins on same M2 track")
+	require.Len(t, segs, 4, "one M2 per pin plus one full-range connector")
+
+	// Find the connector: longest M2 segment.
+	var connector common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && (s.UpperRight.Y-s.LowerLeft.Y) > (connector.UpperRight.Y-connector.LowerLeft.Y) {
+			connector = s
+		}
+	}
+	assert.Equal(t, 50, connector.LowerLeft.Y, "connector starts at min pin start")
+	assert.Equal(t, 800, connector.UpperRight.Y, "connector ends at max pin end")
 }
 
 func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {

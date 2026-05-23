@@ -182,6 +182,7 @@ func (r *FullTrackRouter) tryTrack(
 
 	if minM2Track == maxM2Track {
 		result := make([]Segment, len(pins))
+		connStart, connEnd := 0, 0
 		for i, pin := range pins {
 			var plo, phi int
 			switch r.m2Dir {
@@ -191,6 +192,12 @@ func (r *FullTrackRouter) tryTrack(
 				plo, phi = pin.XLow, pin.XHigh
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
+			}
+			if i == 0 {
+				connStart, connEnd = plo, phi
+			} else {
+				connStart = min(connStart, plo)
+				connEnd = max(connEnd, phi)
 			}
 			m2Start, m2End := r.m2DRC.ApplyEndExtension(plo, phi)
 			m2, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
@@ -202,7 +209,11 @@ func (r *FullTrackRouter) tryTrack(
 			}
 			result[i] = m2.ToSeg()
 		}
-		return result, true
+		conn, err := r.canvas.NewTrack(common.M2, minM2Track, connStart, connEnd, netID)
+		if err != nil {
+			return nil, false
+		}
+		return append(result, conn.ToSeg()), true
 	}
 
 	var m3Start, m3End int
