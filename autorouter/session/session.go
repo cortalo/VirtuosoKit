@@ -96,10 +96,14 @@ func (s *Session) Route() []NetResult {
 		results[i] = NetResult{NetID: net.ID, NetName: net.Name, Shapes: shapes}
 	}
 	pinShapes := lo.Map(s.netlist.Pins, func(pin *RoutingPin, _ int) Shape {
+		layer := pin.Layer
+		if layer == 0 {
+			layer = common.M1
+		}
 		return Shape{
 			LowerLeft:  Point{X: pin.XLow, Y: pin.YLow},
 			UpperRight: Point{X: pin.XHigh, Y: pin.YHigh},
-			Layer:      common.M1,
+			Layer:      layer,
 			Purpose:    common.Pin,
 			Name:       pin.Name,
 		}
