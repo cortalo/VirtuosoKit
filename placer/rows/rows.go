@@ -138,6 +138,38 @@ func AddFiller(groups [][]common.SchematicInstance, isCompatible func(lib, cell 
 	return result
 }
 
+// PadToMaxWidth appends filler cells on the right of each row until all rows
+// share the total width of the widest row. Rows whose slack is not a multiple
+// of fillerWidth are padded as far as possible; any remaining gap is left empty.
+// Generated names are unique across all rows (RPAD_0, RPAD_1, ...).
+func PadToMaxWidth(groups [][]common.SchematicInstance, fillerLib, fillerCell string, fillerWidth int) [][]common.SchematicInstance {
+	if len(groups) == 0 || fillerWidth <= 0 {
+		return groups
+	}
+	maxW := 0
+	for _, g := range groups {
+		if w := totalWidth(g); w > maxW {
+			maxW = w
+		}
+	}
+	result := make([][]common.SchematicInstance, len(groups))
+	counter := 0
+	for i, g := range groups {
+		row := append([]common.SchematicInstance(nil), g...)
+		for slack := maxW - totalWidth(g); slack >= fillerWidth; slack -= fillerWidth {
+			row = append(row, common.SchematicInstance{
+				Name:  fmt.Sprintf("RPAD_%d", counter),
+				Lib:   fillerLib,
+				Cell:  fillerCell,
+				Width: fillerWidth,
+			})
+			counter++
+		}
+		result[i] = row
+	}
+	return result
+}
+
 func splitGroup(group []common.SchematicInstance, targetWidth int) [][]common.SchematicInstance {
 	var result [][]common.SchematicInstance
 	var current []common.SchematicInstance

@@ -41,6 +41,7 @@ func main() {
 	rowHeight := flag.Int("row-height", 2000, "standard cell row height in nm")
 	rowThreshold := flag.Float64("row-threshold", 1.0, "Y gap threshold in schematic units for row detection")
 	targetWidth := flag.Int("target-width", 0, "maximum row width in nm; 0 disables splitting")
+	alignRows := flag.Bool("align-rows", false, "pad each row on the right with filler to match the widest row")
 	verbose := flag.Bool("verbose", false, "print placement progress to stderr")
 	flag.Parse()
 
@@ -77,6 +78,9 @@ func main() {
 	if fc, ok := db.FillerCell(); ok {
 		if fw, err := db.Query(fc.Lib, fc.Cell); err == nil {
 			grouped = rows.AddFiller(grouped, db.IsFillerCompatible, fc.Lib, fc.Cell, fw)
+			if *alignRows {
+				grouped = rows.PadToMaxWidth(grouped, fc.Lib, fc.Cell, fw)
+			}
 		}
 	}
 

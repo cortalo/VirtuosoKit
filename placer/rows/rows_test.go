@@ -238,6 +238,74 @@ func TestAddFiller_MultipleRows_UniqueNames(t *testing.T) {
 	assert.Equal(t, []string{"C", "FILLER_1", "D"}, names(result[1]))
 }
 
+func TestPadToMaxWidth_Empty(t *testing.T) {
+	assert.Nil(t, PadToMaxWidth(nil, "lib", "FILL", 100))
+}
+
+func TestPadToMaxWidth_AllSameWidth_NoPadding(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 300), instW("B", 300)),
+		groupOf(instW("C", 300), instW("D", 300)),
+	}
+	result := PadToMaxWidth(groups, "lib", "FILL", 100)
+	require.Len(t, result, 2)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+	assert.Equal(t, []string{"C", "D"}, names(result[1]))
+}
+
+func TestPadToMaxWidth_PadsShortRows(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 600), instW("B", 600)),  // width 1200
+		groupOf(instW("C", 600)),                   // width 600 → needs 6 fillers of 100
+	}
+	result := PadToMaxWidth(groups, "lib", "FILL", 100)
+	require.Len(t, result, 2)
+	assert.Equal(t, []string{"A", "B"}, names(result[0]))
+	require.Len(t, result[1], 7, "C + 6 filler cells")
+	assert.Equal(t, "C", result[1][0].Name)
+	for _, f := range result[1][1:] {
+		assert.Equal(t, "lib", f.Lib)
+		assert.Equal(t, "FILL", f.Cell)
+		assert.Equal(t, 100, f.Width)
+	}
+	assert.Equal(t, totalWidth(result[0]), totalWidth(result[1]))
+}
+
+func TestPadToMaxWidth_SlackNotMultiple_PadsAsFarAsPossible(t *testing.T) {
+	// row0: 1000, row1: 750 → slack=250, fillerWidth=200 → 1 filler (row1=950)
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 1000)),
+		groupOf(instW("B", 750)),
+	}
+	result := PadToMaxWidth(groups, "lib", "FILL", 200)
+	require.Len(t, result, 2)
+	assert.Equal(t, []string{"A"}, names(result[0]))
+	require.Len(t, result[1], 2, "B + 1 filler")
+	assert.Equal(t, 950, totalWidth(result[1]))
+}
+
+func TestPadToMaxWidth_UniqueNames(t *testing.T) {
+	groups := [][]common.SchematicInstance{
+		groupOf(instW("A", 200)),
+		groupOf(instW("B", 200)),
+		groupOf(instW("C", 600)),  // widest
+	}
+	result := PadToMaxWidth(groups, "lib", "FILL", 200)
+	var padNames []string
+	for _, row := range result {
+		for _, inst := range row {
+			if inst.Lib == "lib" && inst.Cell == "FILL" {
+				padNames = append(padNames, inst.Name)
+			}
+		}
+	}
+	unique := make(map[string]struct{})
+	for _, n := range padNames {
+		unique[n] = struct{}{}
+	}
+	assert.Equal(t, len(padNames), len(unique), "all RPAD names must be unique")
+}
+
 func TestGroup_SloppySchematic_WithinRowOffsets(t *testing.T) {
 	// Within-row Y offsets up to 0.5, row spacing is 50. threshold=1.
 	instances := []common.SchematicInstance{
