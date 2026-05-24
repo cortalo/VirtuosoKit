@@ -75,7 +75,12 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 
 	m3Lo, m3Hi := r.m3DRC.ApplyEndExtension(minX, maxX+r.m2Width)
 	m3, err := r.canvas.NewTrack(common.M3, trackID, m3Lo, m3Hi, netID)
-	if err != nil || !r.canvas.IsPassible(m3.ToSeg()) ||
+	if err != nil {
+		return nil, false
+	}
+	m3Space := m3
+	m3Space.Start, m3Space.End = r.m3DRC.ApplyMinSpaceExtension(m3.Start, m3.End)
+	if !r.canvas.IsPassible(m3Space.ToSeg()) ||
 		(!m3.IsFirstTrack() && r.canvas.IsOccupied(m3.PrevTrack().ToSeg())) ||
 		(!m3.IsLastTrack() && r.canvas.IsOccupied(m3.NextTrack().ToSeg())) {
 		return nil, false
@@ -90,7 +95,9 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 			Point{X: pin.XLow + r.m2Width, Y: m2Hi},
 			netID,
 		)
-		if err != nil || !r.canvas.IsPassible(m2Segs[i]) || !r.m2DRC.SatisfiesMinArea(m2Segs[i]) {
+		m2Space := m2Segs[i]
+		m2Space.LowerLeft.Y, m2Space.UpperRight.Y = r.m2DRC.ApplyMinSpaceExtension(m2Segs[i].LowerLeft.Y, m2Segs[i].UpperRight.Y)
+		if err != nil || !r.canvas.IsPassible(m2Space) || !r.m2DRC.SatisfiesMinArea(m2Segs[i]) {
 			return nil, false
 		}
 	}
@@ -122,7 +129,12 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 			Point{X: maxX + r.m2Width, Y: m3.GetUpper()},
 			netID,
 		)
-		if err != nil || !r.canvas.IsPassible(m2Horiz) {
+		if err != nil {
+			return nil, false
+		}
+		m2HorizSpace := m2Horiz
+		m2HorizSpace.LowerLeft.X, m2HorizSpace.UpperRight.X = r.m2DRC.ApplyMinSpaceExtension(m2Horiz.LowerLeft.X, m2Horiz.UpperRight.X)
+		if !r.canvas.IsPassible(m2HorizSpace) {
 			return nil, false
 		}
 		return append(m2Segs, m2Horiz), true

@@ -241,3 +241,46 @@ func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
 	assert.Equal(t, 400, m2Horiz.LowerLeft.Y)
 	assert.Equal(t, 500, m2Horiz.UpperRight.Y)
 }
+
+// --- min space ---
+
+// Pre-occupy M3 at X=[0,55] on track 5. The M3 segment runs from X=100 to X=901,
+// so without space extension there is no overlap (100 > 55). With space=50 the
+// extended segment starts at 50 < 55, making track 5 not passible.
+func TestRoute_M3MinSpace_BlocksMidTrack(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	require.NoError(t, c.Occupy(common.Segment{
+		Layer:        common.M3,
+		LowerLeft:    common.Point{X: 0, Y: 500},
+		UpperRight:   common.Point{X: 55, Y: 600},
+		NetID:        99,
+		CanvasOrigin: common.Point{X: 0, Y: 0},
+		Dir:          common.Horizontal,
+	}))
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, minSpaceDRC{space: 50})
+
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+
+	require.NoError(t, err)
+	assert.NotEqual(t, 5, m3Track(segs, 100))
+}
+
+// Pre-occupy M2 at X=[100,101], Y=[600,660] — just above M3 track 5's upper bound of 600.
+// The vertical M2 stub for the left pin ends at Y=600 (touching, no overlap without extension).
+// With space=50 the extended stub reaches Y=650 > 600, blocking track 5.
+// Track 4 (M2 ends at Y=500, extended to Y=550 < 600) is unaffected and becomes the fallback.
+func TestRoute_M2MinSpace_BlocksMidTrack(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	require.NoError(t, c.Occupy(common.Segment{
+		Layer:      common.M2,
+		LowerLeft:  common.Point{X: 100, Y: 600},
+		UpperRight: common.Point{X: 101, Y: 660},
+		NetID:      99,
+	}))
+	r := router.NewTwoLayerRouter(c, 1, minSpaceDRC{space: 50}, common.NoDRC{})
+
+	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 4, m3Track(segs, 100))
+}
