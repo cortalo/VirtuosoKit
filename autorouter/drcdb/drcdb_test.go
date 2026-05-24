@@ -116,3 +116,25 @@ func TestQuery_ViaEnclosureDefaultsToZero(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, spec.ViaEnclosure())
 }
+
+func TestQuery_ReturnsViaTrackSpacing(t *testing.T) {
+	toml := `
+[lib.M2]
+via_track_spacing = 3
+`
+	db, err := drcdb.Load(writeTempTOML(t, toml))
+	require.NoError(t, err)
+
+	spec, err := db.Query("lib", "M2")
+	require.NoError(t, err)
+	assert.Equal(t, 3, spec.ViaTrackSpacing())
+}
+
+func TestQuery_ViaTrackSpacingDefaultsToOne(t *testing.T) {
+	db, err := drcdb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	spec, err := db.Query("tsmc18", "M2")
+	require.NoError(t, err)
+	assert.Equal(t, 1, spec.ViaTrackSpacing())
+}

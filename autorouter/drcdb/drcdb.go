@@ -17,9 +17,10 @@ var (
 // TOML leaves unset fields at their zero values.
 type rawEntry struct {
 	// metal layer fields
-	MinArea      int `toml:"min_area"`
-	EndExtension int `toml:"end_extension"`
-	ViaEnclosure int `toml:"via_enclosure"`
+	MinArea         int `toml:"min_area"`
+	EndExtension    int `toml:"end_extension"`
+	ViaEnclosure    int `toml:"via_enclosure"`
+	ViaTrackSpacing int `toml:"via_track_spacing"`
 	// via fields
 	ViaDef string `toml:"via_def"`
 	CutW   int    `toml:"cut_w"`
@@ -30,9 +31,10 @@ type rawEntry struct {
 
 // DRCSpec holds the manufacturing rules for a single metal layer.
 type DRCSpec struct {
-	minArea      int
-	endExtension int
-	viaEnclosure int
+	minArea         int
+	endExtension    int
+	viaEnclosure    int
+	viaTrackSpacing int
 }
 
 func (s DRCSpec) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= s.minArea }
@@ -40,6 +42,12 @@ func (s DRCSpec) ApplyEndExtension(lo, hi int) (int, int) {
 	return lo - s.endExtension, hi + s.endExtension
 }
 func (s DRCSpec) ViaEnclosure() int { return s.viaEnclosure }
+func (s DRCSpec) ViaTrackSpacing() int {
+	if s.viaTrackSpacing == 0 {
+		return 1
+	}
+	return s.viaTrackSpacing
+}
 
 type DB struct {
 	libs map[string]map[string]rawEntry
@@ -62,7 +70,7 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure}, nil
+	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure, viaTrackSpacing: e.ViaTrackSpacing}, nil
 }
 
 func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {

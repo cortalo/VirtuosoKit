@@ -32,6 +32,7 @@ type endExtDRC struct{ ext int }
 func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool        { return true }
 func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)       { return lo - d.ext, hi + d.ext }
 func (d endExtDRC) ViaEnclosure() int                             { return d.ext }
+func (d endExtDRC) ViaTrackSpacing() int                          { return 1 }
 
 // ftPins builds RoutingPin slices with explicit X and Y ranges.
 func ftPins(coords ...[4]int) []common.RoutingPin {
@@ -303,6 +304,85 @@ func TestFTRoute_HorizontalM2Dir_WrongM3Track(t *testing.T) {
 	// Expected: Y=[0,1000]. Bug: M3 Y is wrong too (computed from X coords of wrong M2 tracks).
 	assert.Equal(t, 0, m3Seg.LowerLeft.Y, "M3 should start at Y=0 (M2 track 0)")
 	assert.Equal(t, 1000, m3Seg.UpperRight.Y, "M3 should end at Y=1000 (M2 track 9)")
+}
+
+// --- ViaTrackSpacing ---
+
+// viaSpacingDRC is a NoDRC variant that only overrides ViaTrackSpacing.
+type viaSpacingDRC struct {
+	common.NoDRC
+	spacing int
+}
+
+func (d viaSpacingDRC) ViaTrackSpacing() int { return d.spacing }
+
+// Canvas 1000x1000, m2tw=100, m3tw=100. Pin1→track 0, Pin2→track 2 only.
+// With spacing=1 (default): |diff|=2 > 1 → succeeds.
+// With spacing=3: |diff|=2 <= 3 → rejected; no other candidates → ErrNoPath.
+func TestFTRoute_ViaTrackSpacingDefault_AllowsGapOfTwo(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := newFTRouter(c)
+
+	pins := []common.RoutingPin{
+		{XLow: 0, XHigh: 100, YLow: 100, YHigh: 200},
+		{XLow: 200, XHigh: 300, YLow: 100, YHigh: 200},
+	}
+	segs, err := r.Route(pins, 1)
+	require.NoError(t, err)
+
+	var m2Tracks []int
+	for _, s := range segs {
+		if s.Layer == common.M2 {
+			m2Tracks = append(m2Tracks, s.LowerLeft.X/100)
+		}
+	}
+	require.Len(t, m2Tracks, 2)
+	diff := m2Tracks[0] - m2Tracks[1]
+	if diff < 0 {
+		diff = -diff
+	}
+	assert.Equal(t, 2, diff, "with default spacing=1, tracks 0 and 2 (|diff|=2) should be chosen")
+}
+
+func TestFTRoute_ViaTrackSpacing_RejectsCloseConfiguration(t *testing.T) {
+	// spacing=3: pin1→track 0, pin2→track 2 only. |diff|=2 ≤ 3 → ErrNoPath.
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := router.NewFullTrackRouter(c, common.Vertical, viaSpacingDRC{spacing: 3}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{XLow: 0, XHigh: 100, YLow: 100, YHigh: 200},
+		{XLow: 200, XHigh: 300, YLow: 100, YHigh: 200},
+	}
+	_, err := r.Route(pins, 1)
+	assert.ErrorIs(t, err, router.ErrNoPath)
+}
+
+func TestFTRoute_ViaTrackSpacing_RouterPicksFarTrack(t *testing.T) {
+	// spacing=3: pin1 spans tracks 0-1, pin2 spans tracks 4-5.
+	// Closest pair would be (1,4) with |diff|=3 → rejected.
+	// Router must find (0,4) or (1,5) with |diff|=4 → accepted.
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := router.NewFullTrackRouter(c, common.Vertical, viaSpacingDRC{spacing: 3}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{XLow: 0, XHigh: 200, YLow: 100, YHigh: 200},   // candidates: tracks 0,1
+		{XLow: 400, XHigh: 600, YLow: 100, YHigh: 200},  // candidates: tracks 4,5
+	}
+	segs, err := r.Route(pins, 1)
+	require.NoError(t, err)
+
+	var m2Tracks []int
+	for _, s := range segs {
+		if s.Layer == common.M2 {
+			m2Tracks = append(m2Tracks, s.LowerLeft.X/100)
+		}
+	}
+	require.Len(t, m2Tracks, 2)
+	diff := m2Tracks[0] - m2Tracks[1]
+	if diff < 0 {
+		diff = -diff
+	}
+	assert.Greater(t, diff, 3, "chosen M2 tracks must be more than 3 apart (spacing=3)")
 }
 
 // --- M2-layer RoutingPin ---
