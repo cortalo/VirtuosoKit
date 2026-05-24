@@ -26,6 +26,13 @@ func newFTRouter(c *canvas.FullTrackCanvas) *router.FullTrackRouter {
 	return router.NewFullTrackRouter(c, c.M2Dir, common.NoDRC{}, common.NoDRC{})
 }
 
+// endExtDRC is a DRCSpec with a fixed symmetric end extension and no min-area constraint.
+type endExtDRC struct{ ext int }
+
+func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool        { return true }
+func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)       { return lo - d.ext, hi + d.ext }
+func (d endExtDRC) ViaEnclosure() int                             { return d.ext }
+
 // ftPins builds RoutingPin slices with explicit X and Y ranges.
 func ftPins(coords ...[4]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))
@@ -338,6 +345,72 @@ func TestFTRoute_M2LayerPin_SameTrack(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, -1, m3Track(segs, 100), "no M3 when all pins on same M2 track")
 	require.Len(t, segs, 3, "one M2 per pin plus connector")
+}
+
+// TestFTRoute_M2Pin_EndExtensionApplied exposes the bug where an M2-layer pin
+// gets no DRC end extension, leaving the M2 segment too short to satisfy Via23
+// enclosure at the M3 connection.
+//
+// Canvas 1000×1000, m2tw=100, m3tw=100, M2=Vertical, m2DRC.endExtension=50.
+// Pin1 (M1): X=[0,100]   Y=[520,580] → M2 track 0.
+// Pin2 (M2): X=[200,300] Y=[520,580] → M2 track 2. Both pins inside M3 band.
+// midY=(520+520)/2=520 → M3 track 5 (Y=[500,600]).
+//
+// Correct M2 for pin2: ApplyEndExtension(m3Lower=500, m3Upper=600) = [450,650].
+// Bug: extension skipped entirely → [500,600].
+func TestFTRoute_M2Pin_EndExtensionApplied(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := router.NewFullTrackRouter(c, common.Vertical, endExtDRC{50}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{Layer: common.M1, XLow: 0, XHigh: 100, YLow: 520, YHigh: 580},
+		{Layer: common.M2, XLow: 200, XHigh: 300, YLow: 520, YHigh: 580},
+	}
+	segs, err := r.Route(pins, 1)
+	require.NoError(t, err)
+
+	var m2Pin2 common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 200 {
+			m2Pin2 = s
+			break
+		}
+	}
+	assert.Equal(t, 450, m2Pin2.LowerLeft.Y, "M2 pin segment must extend past M3 lower bound (bug: no DRC extension)")
+	assert.Equal(t, 650, m2Pin2.UpperRight.Y, "M2 pin segment must extend past M3 upper bound (bug: no DRC extension)")
+}
+
+// TestFTRoute_M2Pin_PinLargerThanExtendedM3 verifies that when an M2-layer
+// pin already extends beyond the extended M3 band, the full pin range is used.
+//
+// Canvas 1000×1000, m2tw=100, m3tw=100, M2=Vertical, m2DRC.endExtension=50.
+// Pin1 (M1): X=[0,100]   Y=[520,580] → M2 track 0.
+// Pin2 (M2): X=[200,300] Y=[400,700] → M2 track 2; pin extends beyond M3 band.
+// midY=(520+400)/2=460 → M3 track 4 (Y=[400,500]).
+// Extended M3 band: [350,550]. Pin2 range [400,700] exceeds the upper end.
+//
+// Correct M2 for pin2: m2Start=min(350,400)=350, m2End=max(550,700)=700 → [350,700].
+// Bug: lower bound not extended → m2Start=400.
+func TestFTRoute_M2Pin_PinLargerThanExtendedM3(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	r := router.NewFullTrackRouter(c, common.Vertical, endExtDRC{50}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{Layer: common.M1, XLow: 0, XHigh: 100, YLow: 520, YHigh: 580},
+		{Layer: common.M2, XLow: 200, XHigh: 300, YLow: 400, YHigh: 700},
+	}
+	segs, err := r.Route(pins, 1)
+	require.NoError(t, err)
+
+	var m2Pin2 common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 200 {
+			m2Pin2 = s
+			break
+		}
+	}
+	assert.Equal(t, 350, m2Pin2.LowerLeft.Y, "M2 pin lower end must extend to M3 extension even when pin is large")
+	assert.Equal(t, 700, m2Pin2.UpperRight.Y, "M2 pin upper end must use pin range when larger than extension")
 }
 
 // Route returns len(pins)+1 segments: one M2 per pin plus one M3.

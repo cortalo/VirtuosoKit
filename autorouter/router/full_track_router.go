@@ -156,11 +156,13 @@ func (r *FullTrackRouter) tryTrack(
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
 			}
-			rangeStart, rangeEnd := min(pinAlong0, m3Lower), max(pinAlong1, m3Upper)
 			var m2Start, m2End int
 			if pin.Layer == common.M2 {
-				m2Start, m2End = rangeStart, rangeEnd
+				extStart, extEnd := r.m2DRC.ApplyEndExtension(m3Lower, m3Upper)
+				m2Start = min(extStart, pinAlong0)
+				m2End = max(extEnd, pinAlong1)
 			} else {
+				rangeStart, rangeEnd := min(pinAlong0, m3Lower), max(pinAlong1, m3Upper)
 				m2Start, m2End = r.m2DRC.ApplyEndExtension(rangeStart, rangeEnd)
 			}
 			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
