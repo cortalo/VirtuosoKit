@@ -86,7 +86,9 @@ func expandNets(raw map[string][]string) (map[string][]string, error) {
 		for _, ip := range instPins {
 			expanded = append(expanded, expandInstPin(ip)...)
 		}
-		if len(netNames) == 1 {
+		if len(expanded) == 0 {
+			continue
+		} else if len(netNames) == 1 {
 			result[netNames[0]] = append(result[netNames[0]], expanded...)
 		} else if len(netNames) == len(expanded) {
 			for i, name := range netNames {

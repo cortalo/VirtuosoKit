@@ -65,6 +65,15 @@ func TestExpandNets_MismatchError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestExpandNets_BusKeyNoInstPins(t *testing.T) {
+	raw := map[string][]string{
+		"s<1:0>": {}, // bus net with no connected instance pins
+	}
+	got, err := expandNets(raw)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func TestExpandSchematicInstances(t *testing.T) {
 	insts := []SchematicInstance{
 		{Name: "I0<2:0>", Lib: "mylib"},
