@@ -170,7 +170,12 @@ func (r *FullTrackRouter) tryTrack(
 				m2Start, m2End = r.m2DRC.ApplyEndExtension(rangeStart, rangeEnd)
 			}
 			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
-			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
+			if err != nil {
+				continue
+			}
+			m2Space := m2
+			m2Space.Start, m2Space.End = r.m2DRC.ApplyMinSpaceExtension(m2.Start, m2.End)
+			if !r.canvas.IsPassible(m2Space.ToSeg()) ||
 				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||
 				(!m2.IsLastTrack() && r.canvas.IsOccupied(m2.NextTrack().ToSeg())) ||
 				!r.m2DRC.SatisfiesMinArea(m2.ToSeg()) {
@@ -218,7 +223,12 @@ func (r *FullTrackRouter) tryTrack(
 				m2Start, m2End = r.m2DRC.ApplyEndExtension(plo, phi)
 			}
 			m2, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
-			if err != nil || !r.canvas.IsPassible(m2.ToSeg()) ||
+			if err != nil {
+				continue
+			}
+			m2Space := m2
+			m2Space.Start, m2Space.End = r.m2DRC.ApplyMinSpaceExtension(m2.Start, m2.End)
+			if !r.canvas.IsPassible(m2Space.ToSeg()) ||
 				(!m2.IsFirstTrack() && r.canvas.IsOccupied(m2.PrevTrack().ToSeg())) ||
 				(!m2.IsLastTrack() && r.canvas.IsOccupied(m2.NextTrack().ToSeg())) ||
 				!r.m2DRC.SatisfiesMinArea(m2.ToSeg()) {
@@ -244,7 +254,12 @@ func (r *FullTrackRouter) tryTrack(
 	}
 
 	m3, err := r.canvas.NewTrack(common.M3, m3TrackID, m3Start, m3End, netID)
-	if err != nil || !r.canvas.IsPassible(m3.ToSeg()) ||
+	if err != nil {
+		return nil, false
+	}
+	m3Space := m3
+	m3Space.Start, m3Space.End = r.m3DRC.ApplyMinSpaceExtension(m3.Start, m3.End)
+	if !r.canvas.IsPassible(m3Space.ToSeg()) ||
 		(!m3.IsFirstTrack() && r.canvas.IsOccupied(m3.PrevTrack().ToSeg())) ||
 		(!m3.IsLastTrack() && r.canvas.IsOccupied(m3.NextTrack().ToSeg())) {
 		return nil, false

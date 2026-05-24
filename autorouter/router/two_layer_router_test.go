@@ -30,6 +30,7 @@ func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool { return seg.Get
 func (d m3MinAreaDRC) ApplyEndExtension(lo, hi int) (int, int)  { return lo, hi }
 func (d m3MinAreaDRC) ViaEnclosure() int                        { return 0 }
 func (d m3MinAreaDRC) ViaTrackSpacing() int                     { return 1 }
+func (d m3MinAreaDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
 
 func pins(coords ...[2]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))

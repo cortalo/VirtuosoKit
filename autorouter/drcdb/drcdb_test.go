@@ -138,3 +138,29 @@ func TestQuery_ViaTrackSpacingDefaultsToOne(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, spec.ViaTrackSpacing())
 }
+
+func TestQuery_ReturnsMinSpace(t *testing.T) {
+	toml := `
+[lib.M2]
+min_space = 40
+`
+	db, err := drcdb.Load(writeTempTOML(t, toml))
+	require.NoError(t, err)
+
+	spec, err := db.Query("lib", "M2")
+	require.NoError(t, err)
+	lo, hi := spec.ApplyMinSpaceExtension(100, 500)
+	assert.Equal(t, 60, lo)
+	assert.Equal(t, 540, hi)
+}
+
+func TestQuery_MinSpaceDefaultsToNoOp(t *testing.T) {
+	db, err := drcdb.Load(writeTempTOML(t, testTOML))
+	require.NoError(t, err)
+
+	spec, err := db.Query("tsmc18", "M2")
+	require.NoError(t, err)
+	lo, hi := spec.ApplyMinSpaceExtension(100, 500)
+	assert.Equal(t, 100, lo)
+	assert.Equal(t, 500, hi)
+}

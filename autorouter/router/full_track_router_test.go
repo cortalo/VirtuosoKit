@@ -33,6 +33,7 @@ func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool        { return true 
 func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)       { return lo - d.ext, hi + d.ext }
 func (d endExtDRC) ViaEnclosure() int                             { return d.ext }
 func (d endExtDRC) ViaTrackSpacing() int                          { return 1 }
+func (d endExtDRC) ApplyMinSpaceExtension(lo, hi int) (int, int)  { return lo, hi }
 
 // ftPins builds RoutingPin slices with explicit X and Y ranges.
 func ftPins(coords ...[4]int) []common.RoutingPin {
@@ -383,6 +384,54 @@ func TestFTRoute_ViaTrackSpacing_RouterPicksFarTrack(t *testing.T) {
 		diff = -diff
 	}
 	assert.Greater(t, diff, 3, "chosen M2 tracks must be more than 3 apart (spacing=3)")
+}
+
+// --- MinSpace ---
+
+// minSpaceDRC is a NoDRC variant that only overrides ApplyMinSpaceExtension.
+type minSpaceDRC struct {
+	common.NoDRC
+	space int
+}
+
+func (d minSpaceDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo - d.space, hi + d.space }
+
+// Canvas 1000×1000, m2tw=100, m3tw=100, m2DRC.minSpace=50.
+// Occupied M2 track 0: Y=[0,400]. Pin1 on track 0 only.
+//
+// Rejection: pin1 Y=[440,540].
+//   For any M3 track t, m2Start = min(440, t*100) ≤ 440.
+//   Space-extended start ≤ 440-50=390 < 400 → always overlaps [0,400] → ErrNoPath.
+//
+// Acceptance: pin1 Y=[460,560].
+//   M3 track 5 (m3Lower=500): m2Start=min(460,500)=460, extended_start=410 > 400
+//   → no overlap → routing succeeds.
+func TestFTRoute_M2MinSpace_RejectsSegmentTooClose(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	require.NoError(t, occupyFTM2Track(c, 0, 0, 400, -1, 100))
+
+	r := router.NewFullTrackRouter(c, common.Vertical, minSpaceDRC{space: 50}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{XLow: 0, XHigh: 100, YLow: 440, YHigh: 540},   // track 0 only; gap=40 < 50
+		{XLow: 500, XHigh: 600, YLow: 440, YHigh: 540},  // track 5, unobstructed
+	}
+	_, err := r.Route(pins, 1)
+	assert.ErrorIs(t, err, router.ErrNoPath, "gap < minSpace must be rejected")
+}
+
+func TestFTRoute_M2MinSpace_AcceptsSegmentFarEnough(t *testing.T) {
+	c := newFTCanvas(1000, 1000, 100, 100)
+	require.NoError(t, occupyFTM2Track(c, 0, 0, 400, -1, 100))
+
+	r := router.NewFullTrackRouter(c, common.Vertical, minSpaceDRC{space: 50}, common.NoDRC{})
+
+	pins := []common.RoutingPin{
+		{XLow: 0, XHigh: 100, YLow: 460, YHigh: 560},   // track 0; M3 track 5 gives gap=60 > 50
+		{XLow: 500, XHigh: 600, YLow: 460, YHigh: 560},  // track 5, unobstructed
+	}
+	_, err := r.Route(pins, 1)
+	assert.NoError(t, err, "gap >= minSpace must be accepted")
 }
 
 // --- M2-layer RoutingPin ---

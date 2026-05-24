@@ -251,15 +251,19 @@ type DRCSpec interface {
 	// two M2 tracks that each carry a via to M3, to satisfy via spacing DRC.
 	// Default is 1 (one empty track between any two via-bearing M2 tracks).
 	ViaTrackSpacing() int
+	// ApplyMinSpaceExtension extends [lo, hi] by the min_space rule in both
+	// directions, returning the spacing-check range. No-op when min_space=0.
+	ApplyMinSpaceExtension(lo, hi int) (int, int)
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
 type NoDRC struct{}
 
-func (NoDRC) SatisfiesMinArea(_ Segment) bool         { return true }
-func (NoDRC) ApplyEndExtension(lo, hi int) (int, int) { return lo, hi }
-func (NoDRC) ViaEnclosure() int                       { return 0 }
-func (NoDRC) ViaTrackSpacing() int                    { return 1 }
+func (NoDRC) SatisfiesMinArea(_ Segment) bool                { return true }
+func (NoDRC) ApplyEndExtension(lo, hi int) (int, int)        { return lo, hi }
+func (NoDRC) ViaEnclosure() int                              { return 0 }
+func (NoDRC) ViaTrackSpacing() int                           { return 1 }
+func (NoDRC) ApplyMinSpaceExtension(lo, hi int) (int, int)   { return lo, hi }
 
 // ToTrack converts a Segment to a TrackSegment using seg.Dir and seg.CanvasOrigin.
 // Horizontal: TrackID from Y, Start/End are X coordinates.

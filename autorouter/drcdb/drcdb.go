@@ -21,6 +21,7 @@ type rawEntry struct {
 	EndExtension    int `toml:"end_extension"`
 	ViaEnclosure    int `toml:"via_enclosure"`
 	ViaTrackSpacing int `toml:"via_track_spacing"`
+	MinSpace        int `toml:"min_space"`
 	// via fields
 	ViaDef string `toml:"via_def"`
 	CutW   int    `toml:"cut_w"`
@@ -35,6 +36,7 @@ type DRCSpec struct {
 	endExtension    int
 	viaEnclosure    int
 	viaTrackSpacing int
+	minSpace        int
 }
 
 func (s DRCSpec) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= s.minArea }
@@ -47,6 +49,9 @@ func (s DRCSpec) ViaTrackSpacing() int {
 		return 1
 	}
 	return s.viaTrackSpacing
+}
+func (s DRCSpec) ApplyMinSpaceExtension(lo, hi int) (int, int) {
+	return lo - s.minSpace, hi + s.minSpace
 }
 
 type DB struct {
@@ -70,7 +75,7 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure, viaTrackSpacing: e.ViaTrackSpacing}, nil
+	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure, viaTrackSpacing: e.ViaTrackSpacing, minSpace: e.MinSpace}, nil
 }
 
 func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {
