@@ -88,7 +88,7 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 
 	m2Segs := make([]Segment, len(pins))
 	for i, pin := range pins {
-		m2Lo, m2Hi := r.m2DRC.ApplyEndExtension(min(pin.YLow, m3.GetLower()), max(pin.YHigh, m3.GetUpper()))
+		m2Lo, m2Hi := r.m2DRC.ApplyEndExtension(r.pinM2Bounds(pin, m3))
 		m2Segs[i], err = r.canvas.NewSeg(
 			common.M2,
 			Point{X: pin.XLow, Y: m2Lo},
@@ -104,19 +104,11 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 
 	if !r.m3DRC.SatisfiesMinArea(m3.ToSeg()) {
 		for i, pin := range pins {
-			pinLo, pinHi := r.m2DRC.ApplyEndExtension(pin.YLow, pin.YHigh)
-			yLow := m3.GetLower()
-			if pin.YLow < m3.GetLower() {
-				yLow = pinLo
-			}
-			yHigh := m3.GetUpper()
-			if pin.YHigh > m3.GetUpper() {
-				yHigh = pinHi
-			}
+			m2Lo, m2Hi := r.m2DRC.ApplyEndExtension(r.pinM2Bounds(pin, m3))
 			m2Segs[i], err = r.canvas.NewSeg(
 				common.M2,
-				Point{X: pin.XLow, Y: yLow},
-				Point{X: pin.XLow + r.m2Width, Y: yHigh},
+				Point{X: pin.XLow, Y: m2Lo},
+				Point{X: pin.XLow + r.m2Width, Y: m2Hi},
 				netID,
 			)
 			if err != nil {
@@ -141,4 +133,28 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 	}
 
 	return append(m2Segs, m3.ToSeg()), true
+}
+
+// pinM2Bounds returns the raw (before end-extension) Y range for the M2 stub
+// connecting pin to m3. When pin.MinOverlap is set and MinPinOverlap() > 0,
+// M2 enters the pin bbox by only MinPinOverlap() nm from the nearest edge;
+// otherwise the full pin height is covered.
+func (r *TwoLayerRouter) pinM2Bounds(pin RoutingPin, m3 TrackSegment) (lo, hi int) {
+	minOv := r.m2DRC.MinPinOverlap()
+	if pin.MinOverlap && minOv > 0 {
+		pinCenterY := (pin.YLow + pin.YHigh) / 2
+		m3CenterY := (m3.GetLower() + m3.GetUpper()) / 2
+		if pinCenterY <= m3CenterY {
+			// pin center is below M3 center: enter from the near (top) edge of the pin.
+			// Cap the entry point at m3.GetUpper() so the overlap is measured against the
+			// actual M2 top, not a pin.YHigh that extends past the M3 track.
+			// Also clamp lo to at most m3.GetLower() so M2 always covers the full M3 track.
+			return min(m3.GetLower(), max(pin.YLow, min(pin.YHigh, m3.GetUpper())-minOv)), m3.GetUpper()
+		}
+		// pin center is above M3 center: enter from the near (bottom) edge of the pin.
+		// Cap the entry point at m3.GetLower() symmetrically.
+		// Also clamp hi to at least m3.GetUpper() so M2 always covers the full M3 track.
+		return m3.GetLower(), max(m3.GetUpper(), min(pin.YHigh, max(pin.YLow, m3.GetLower())+minOv))
+	}
+	return min(pin.YLow, m3.GetLower()), max(pin.YHigh, m3.GetUpper())
 }

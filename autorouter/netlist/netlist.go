@@ -200,7 +200,8 @@ func transformPin(xLow, xHigh, yLow, yHigh int, orient string) (int, int, int, i
 // converted to nm. For multi-pin nets, consecutive pin pairs are chained and share
 // the same net ID. Nets in ignoreNets and pins whose instance belongs to a lib in
 // ignoreLibs are skipped; a net with fewer than 2 remaining pins is dropped.
-func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets, ignoreLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
+// Pins whose instance lib is in minOverlapLibs have RoutingPin.MinOverlap set to true.
+func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
 	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
 	if err != nil {
 		return
@@ -213,6 +214,10 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 	ignoredLibs := make(map[string]struct{}, len(ignoreLibs))
 	for _, l := range ignoreLibs {
 		ignoredLibs[l] = struct{}{}
+	}
+	minOverlapLibSet := make(map[string]struct{}, len(minOverlapLibs))
+	for _, l := range minOverlapLibs {
+		minOverlapLibSet[l] = struct{}{}
 	}
 
 	expandedInsts := expandSchematicInstances(schematic.Instances)
@@ -273,12 +278,14 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))
 			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
+			_, isMinOverlap := minOverlapLibSet[inst.Lib]
 			pins = append(pins, common.RoutingPin{
-				Layer: pinLayer,
-				XLow:  instX + txLow,
-				XHigh: instX + txHigh,
-				YLow:  instY + tyLow,
-				YHigh: instY + tyHigh,
+				Layer:      pinLayer,
+				XLow:       instX + txLow,
+				XHigh:      instX + txHigh,
+				YLow:       instY + tyLow,
+				YHigh:      instY + tyHigh,
+				MinOverlap: isMinOverlap,
 			})
 		}
 		if len(pins) < 2 {
@@ -341,7 +348,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 }
 
 // BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
-func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
+func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
 	var layout Layout
 	if err = parseJSON(layoutPath, &layout); err != nil {
 		return
@@ -350,7 +357,7 @@ func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLib
 	if err = parseJSON(schematicPath, &schematic); err != nil {
 		return
 	}
-	return BuildNetsFromData(layout, schematic, db, ignoreNets, ignoreLibs)
+	return BuildNetsFromData(layout, schematic, db, ignoreNets, ignoreLibs, minOverlapLibs)
 }
 
 func parseJSON(path string, v any) error {

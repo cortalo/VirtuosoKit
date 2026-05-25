@@ -148,6 +148,8 @@ func main() {
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	var ignoreLibs ignoreNetFlag
 	flag.Var(&ignoreLibs, "ignore-lib", "lib name whose instances are excluded from routing (repeatable, e.g. -ignore-lib analogLib)")
+	var minOverlapLibs ignoreNetFlag
+	flag.Var(&minOverlapLibs, "min-overlap-lib", "lib name whose pins use minimum M2 overlap (repeatable, e.g. -min-overlap-lib stdcellLib)")
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	flag.Parse()
 
@@ -180,7 +182,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs)
+	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs, minOverlapLibs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

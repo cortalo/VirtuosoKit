@@ -26,11 +26,12 @@ func newRouter(c *canvas.TwoLayerCanvas) *router.TwoLayerRouter {
 
 type m3MinAreaDRC struct{ area int }
 
-func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= d.area }
-func (d m3MinAreaDRC) ApplyEndExtension(lo, hi int) (int, int)  { return lo, hi }
-func (d m3MinAreaDRC) ViaEnclosure() int                        { return 0 }
-func (d m3MinAreaDRC) ViaTrackSpacing() int                     { return 1 }
+func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool     { return seg.GetArea() >= d.area }
+func (d m3MinAreaDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo, hi }
+func (d m3MinAreaDRC) ViaEnclosure() int                            { return 0 }
+func (d m3MinAreaDRC) ViaTrackSpacing() int                         { return 1 }
 func (d m3MinAreaDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
+func (d m3MinAreaDRC) MinPinOverlap() int                           { return 0 }
 
 func pins(coords ...[2]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))
@@ -240,6 +241,161 @@ func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
 	assert.Equal(t, 101, m2Horiz.UpperRight.X)
 	assert.Equal(t, 400, m2Horiz.LowerLeft.Y)
 	assert.Equal(t, 500, m2Horiz.UpperRight.Y)
+}
+
+// --- min pin overlap ---
+
+// minPinOverlapDRC is a NoDRC variant that only overrides MinPinOverlap.
+type minPinOverlapDRC struct {
+	common.NoDRC
+	overlap int
+}
+
+func (d minPinOverlapDRC) MinPinOverlap() int { return d.overlap }
+
+// Canvas 1000x1000, trackWidth=100. pin1 Y=[100,400], pin2 Y=[800,900].
+// midY=(100+800)/2=450 → track 4 (Y=[400,500]).
+// pin1Center=250 < m3Center=450 → pin1 is below M3 → enter from top of pin1.
+//
+// min overlap (150): lo=max(100, min(400,500)-150)=max(100,250)=250, hi=500 — saves 150nm at bottom.
+// full overlap:      lo=min(100,400)=100, hi=max(400,500)=500.
+func TestRoute_MinPinOverlap_ShortensM2Bottom(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	drc := minPinOverlapDRC{overlap: 150}
+	r := router.NewTwoLayerRouter(c, 1, drc, common.NoDRC{})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 100, YHigh: 400, MinOverlap: true},
+		{XLow: 900, YLow: 800, YHigh: 900},
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 4, m3Track(segs, 100))
+
+	var m2Left common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 100 {
+			m2Left = s
+		}
+	}
+	assert.Equal(t, 250, m2Left.LowerLeft.Y, "min-overlap: M2 bottom = min(pin.YHigh,m3.GetUpper())-overlap")
+	assert.Equal(t, 500, m2Left.UpperRight.Y, "M2 top at m3.GetUpper()")
+}
+
+// Canvas 1000x1000, trackWidth=100. Two pins at YLow=100 → midY=100 → track 1 (Y=[100,200]).
+// pin1 Y=[100,400]: pinCenter=250 > m3Center=150 → pin extends above M3 → enter from bottom of pin.
+//
+// min overlap (150): lo=m3.GetLower()=100, hi=min(400, max(100,100)+150)=min(400,250)=250 — saves 150nm at top.
+// full overlap:      lo=min(100,100)=100, hi=max(400,200)=400.
+func TestRoute_MinPinOverlap_ShortensM2Top(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	drc := minPinOverlapDRC{overlap: 150}
+	r := router.NewTwoLayerRouter(c, 1, drc, common.NoDRC{})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 100, YHigh: 400, MinOverlap: true},
+		{XLow: 900, YLow: 100, YHigh: 400},
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, m3Track(segs, 100))
+
+	var m2Left common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 100 {
+			m2Left = s
+		}
+	}
+	assert.Equal(t, 100, m2Left.LowerLeft.Y, "M2 bottom at m3.GetLower()")
+	assert.Equal(t, 250, m2Left.UpperRight.Y, "min-overlap: M2 top = max(pin.YLow,m3.GetLower())+overlap")
+}
+
+// Bug: M2-only fallback (triggered when M3 area < minArea) rebuilds per-pin stubs from
+// pin.YLow/pin.YHigh directly, bypassing pinM2Bounds and ignoring pin.MinOverlap.
+//
+// Canvas 1000x1000, trackWidth=100. Both pins at XLow=100 → M3 span = m2Width = 1,
+// area = 100 < m3MinAreaDRC.area=200 → fallback triggered.
+// midY=100 → track 1 (Y=[100,200]).
+//
+// pin1: MinOverlap=true, Y=[100,400]. pinCenter=250 > m3Center=150 → "above M3".
+// pinM2Bounds: lo=100, hi=min(400, max(100,100)+150)=250.
+// Fallback (buggy): yHigh = pinHi = 400 (pin.YHigh > m3.GetUpper()).
+func TestRoute_MinPinOverlap_M2OnlyFallback_RespectsMinOverlap(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 1, minPinOverlapDRC{overlap: 150}, m3MinAreaDRC{area: 200})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 100, YHigh: 400, MinOverlap: true},
+		{XLow: 100, YLow: 100, YHigh: 400},
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, -1, m3Track(segs, 100), "M2-only path (no M3 segment)")
+
+	var m2Left common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 100 {
+			m2Left = s
+			break
+		}
+	}
+	// MinOverlap=true: M2 top should be m3.GetLower()+minOv = 100+150 = 250, not pin.YHigh = 400.
+	assert.Equal(t, 250, m2Left.UpperRight.Y, "min-overlap must shorten M2 in M2-only fallback")
+}
+
+// Bug: pinM2Bounds "above M3" branch (pinCenterY > m3CenterY) can return hi < m3.GetUpper(),
+// meaning M2 does not fully cover the M3 track.
+//
+// Canvas 1000x1000, trackWidth=100. pin1 Y=[360,380], pin2 Y=[300,400].
+// midY=(360+300)/2=330 → track 3 (Y=[300,400]). m3Center=350.
+// pin1Center=370 > 350 → "above M3": hi=min(380, max(360,300)+150)=min(380,510)=380 < 400. BUG.
+func TestRoute_MinPinOverlap_AboveM3_M2CoversFullTrack(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 1, minPinOverlapDRC{overlap: 150}, common.NoDRC{})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 360, YHigh: 380, MinOverlap: true},
+		{XLow: 900, YLow: 300, YHigh: 400},
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, m3Track(segs, 100))
+
+	var m2Left common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 100 {
+			m2Left = s
+		}
+	}
+	// M2 must cover the full M3 track: UpperRight.Y must be >= m3.GetUpper()=400.
+	assert.Equal(t, 400, m2Left.UpperRight.Y, "min-overlap M2 top must reach m3.GetUpper()")
+}
+
+// With MinOverlap=false the full pin height is covered regardless of minPinOverlap.
+func TestRoute_FullOverlap_IgnoresMinPinOverlapRule(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	drc := minPinOverlapDRC{overlap: 150}
+	r := router.NewTwoLayerRouter(c, 1, drc, common.NoDRC{})
+
+	ps := []common.RoutingPin{
+		{XLow: 100, YLow: 100, YHigh: 400, MinOverlap: false},
+		{XLow: 900, YLow: 800, YHigh: 900},
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	var m2Left common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M2 && s.LowerLeft.X == 100 {
+			m2Left = s
+		}
+	}
+	assert.Equal(t, 100, m2Left.LowerLeft.Y, "full-overlap M2 bottom at pin.YLow")
+	assert.Equal(t, 500, m2Left.UpperRight.Y, "full-overlap M2 top at max(pin.YHigh, m3.GetUpper())")
 }
 
 // --- min space ---

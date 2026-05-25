@@ -29,11 +29,12 @@ func newFTRouter(c *canvas.FullTrackCanvas) *router.FullTrackRouter {
 // endExtDRC is a DRCSpec with a fixed symmetric end extension and no min-area constraint.
 type endExtDRC struct{ ext int }
 
-func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool        { return true }
-func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)       { return lo - d.ext, hi + d.ext }
-func (d endExtDRC) ViaEnclosure() int                             { return d.ext }
-func (d endExtDRC) ViaTrackSpacing() int                          { return 1 }
-func (d endExtDRC) ApplyMinSpaceExtension(lo, hi int) (int, int)  { return lo, hi }
+func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool       { return true }
+func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo - d.ext, hi + d.ext }
+func (d endExtDRC) ViaEnclosure() int                            { return d.ext }
+func (d endExtDRC) ViaTrackSpacing() int                         { return 1 }
+func (d endExtDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
+func (d endExtDRC) MinPinOverlap() int                           { return 0 }
 
 // ftPins builds RoutingPin slices with explicit X and Y ranges.
 func ftPins(coords ...[4]int) []common.RoutingPin {
@@ -367,7 +368,7 @@ func TestFTRoute_ViaTrackSpacing_RouterPicksFarTrack(t *testing.T) {
 
 	pins := []common.RoutingPin{
 		{XLow: 0, XHigh: 200, YLow: 100, YHigh: 200},   // candidates: tracks 0,1
-		{XLow: 400, XHigh: 600, YLow: 100, YHigh: 200},  // candidates: tracks 4,5
+		{XLow: 400, XHigh: 600, YLow: 100, YHigh: 200}, // candidates: tracks 4,5
 	}
 	segs, err := r.Route(pins, 1)
 	require.NoError(t, err)
@@ -414,7 +415,7 @@ func TestFTRoute_M2MinSpace_RejectsSegmentTooClose(t *testing.T) {
 
 	pins := []common.RoutingPin{
 		{XLow: 0, XHigh: 100, YLow: 440, YHigh: 540},   // track 0 only; gap=40 < 50
-		{XLow: 500, XHigh: 600, YLow: 440, YHigh: 540},  // track 5, unobstructed
+		{XLow: 500, XHigh: 600, YLow: 440, YHigh: 540}, // track 5, unobstructed
 	}
 	_, err := r.Route(pins, 1)
 	assert.ErrorIs(t, err, router.ErrNoPath, "gap < minSpace must be rejected")
@@ -428,7 +429,7 @@ func TestFTRoute_M2MinSpace_AcceptsSegmentFarEnough(t *testing.T) {
 
 	pins := []common.RoutingPin{
 		{XLow: 0, XHigh: 100, YLow: 460, YHigh: 560},   // track 0; M3 track 5 gives gap=60 > 50
-		{XLow: 500, XHigh: 600, YLow: 460, YHigh: 560},  // track 5, unobstructed
+		{XLow: 500, XHigh: 600, YLow: 460, YHigh: 560}, // track 5, unobstructed
 	}
 	_, err := r.Route(pins, 1)
 	assert.NoError(t, err, "gap >= minSpace must be accepted")

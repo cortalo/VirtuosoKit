@@ -22,6 +22,7 @@ type rawEntry struct {
 	ViaEnclosure    int `toml:"via_enclosure"`
 	ViaTrackSpacing int `toml:"via_track_spacing"`
 	MinSpace        int `toml:"min_space"`
+	MinPinOverlap   int `toml:"min_pin_overlap"`
 	// via fields
 	ViaDef string `toml:"via_def"`
 	CutW   int    `toml:"cut_w"`
@@ -37,6 +38,7 @@ type DRCSpec struct {
 	viaEnclosure    int
 	viaTrackSpacing int
 	minSpace        int
+	minPinOverlap   int
 }
 
 func (s DRCSpec) SatisfiesMinArea(seg common.Segment) bool { return seg.GetArea() >= s.minArea }
@@ -53,6 +55,7 @@ func (s DRCSpec) ViaTrackSpacing() int {
 func (s DRCSpec) ApplyMinSpaceExtension(lo, hi int) (int, int) {
 	return lo - s.minSpace, hi + s.minSpace
 }
+func (s DRCSpec) MinPinOverlap() int { return s.minPinOverlap }
 
 type DB struct {
 	libs map[string]map[string]rawEntry
@@ -75,7 +78,7 @@ func (db *DB) Query(lib, layer string) (DRCSpec, error) {
 	if !ok {
 		return DRCSpec{}, fmt.Errorf("%w: %s", ErrLayerNotFound, layer)
 	}
-	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure, viaTrackSpacing: e.ViaTrackSpacing, minSpace: e.MinSpace}, nil
+	return DRCSpec{minArea: e.MinArea, endExtension: e.EndExtension, viaEnclosure: e.ViaEnclosure, viaTrackSpacing: e.ViaTrackSpacing, minSpace: e.MinSpace, minPinOverlap: e.MinPinOverlap}, nil
 }
 
 func (db *DB) QueryVia(lib, viaName string) (common.ViaConfig, error) {

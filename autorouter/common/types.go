@@ -220,13 +220,16 @@ func (ts TrackSegment) GetArea() int { return (ts.End - ts.Start) * ts.Width }
 // XLow/YLow is the bottom-left corner of the pin bbox; XHigh/YHigh is the top-right.
 // The session extends M2 to cover the full Y range and computes M1-M2 vias from the bbox.
 // Name is non-empty only for top-level schematic pins (ports of the cell being designed).
+// MinOverlap, when true, instructs the router to enter the pin bbox by only
+// m2DRC.MinPinOverlap() nm instead of covering the full pin height.
 type RoutingPin struct {
-	Name  string
-	Layer Layer // pin metal layer; zero value treated as M1
-	XLow  int
-	XHigh int
-	YLow  int
-	YHigh int
+	Name       string
+	Layer      Layer // pin metal layer; zero value treated as M1
+	XLow       int
+	XHigh      int
+	YLow       int
+	YHigh      int
+	MinOverlap bool
 }
 
 type Net struct {
@@ -254,16 +257,20 @@ type DRCSpec interface {
 	// ApplyMinSpaceExtension extends [lo, hi] by the min_space rule in both
 	// directions, returning the spacing-check range. No-op when min_space=0.
 	ApplyMinSpaceExtension(lo, hi int) (int, int)
+	// MinPinOverlap returns the minimum nm M2 must extend into the pin bbox
+	// when routing in min-overlap mode. Zero means full-overlap (default).
+	MinPinOverlap() int
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
 type NoDRC struct{}
 
-func (NoDRC) SatisfiesMinArea(_ Segment) bool                { return true }
-func (NoDRC) ApplyEndExtension(lo, hi int) (int, int)        { return lo, hi }
-func (NoDRC) ViaEnclosure() int                              { return 0 }
-func (NoDRC) ViaTrackSpacing() int                           { return 1 }
-func (NoDRC) ApplyMinSpaceExtension(lo, hi int) (int, int)   { return lo, hi }
+func (NoDRC) SatisfiesMinArea(_ Segment) bool              { return true }
+func (NoDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo, hi }
+func (NoDRC) ViaEnclosure() int                            { return 0 }
+func (NoDRC) ViaTrackSpacing() int                         { return 1 }
+func (NoDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
+func (NoDRC) MinPinOverlap() int                           { return 0 }
 
 // ToTrack converts a Segment to a TrackSegment using seg.Dir and seg.CanvasOrigin.
 // Horizontal: TrackID from Y, Start/End are X coordinates.
