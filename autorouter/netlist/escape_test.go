@@ -1,6 +1,7 @@
 package netlist
 
 import (
+	"errors"
 	"testing"
 
 	"autorouter/common"
@@ -100,6 +101,20 @@ func TestBuildEscapeShapes_PinNotInDB_Skipped(t *testing.T) {
 	assert.Empty(t, shapes)
 }
 
+// TestBuildEscapeShapes_IsEscapeCellError_ReturnsError: IsEscapeCell failure → error propagated.
+func TestBuildEscapeShapes_IsEscapeCellError_ReturnsError(t *testing.T) {
+	db := &stubDB{
+		escapeErr: errors.New("db unavailable"),
+	}
+	layout := escapeLayout([]LayoutInstance{
+		{Name: "I0", Lib: "mylib", Cell: "mycell", XY: [2]float64{0, 0}, Orient: "R0"},
+	})
+
+	_, err := BuildEscapeShapes(layout, db, testContactVC)
+
+	assert.Error(t, err)
+}
+
 // TestBuildEscapeShapes_BadTerminalLayer_ReturnsError: unrecognised terminal layer → error.
 func TestBuildEscapeShapes_BadTerminalLayer_ReturnsError(t *testing.T) {
 	db := &stubDB{
@@ -156,7 +171,9 @@ func TestBuildEscapeShapes_MultipleInstances_OnlyEscapeProducesShapes(t *testing
 
 // ── escapePathShapes unit tests ───────────────────────────────────────────────
 
-// TestEscapePathShapes_Containment: PC completely contains pin → 1 PC + 1 M1 + contacts.
+// TestEscapePathShapes_Containment: PC X and Y already contain pin.
+// vertPC covers original PC range; horizPC sits at pin Y spanning PC X.
+// M1 is exactly pin.
 func TestEscapePathShapes_Containment(t *testing.T) {
 	pc := common.Shape{
 		Layer:      common.PC,
@@ -171,10 +188,12 @@ func TestEscapePathShapes_Containment(t *testing.T) {
 
 	shapes := escapePathShapes(pc, pin, testContactVC)
 
-	assert.Equal(t, 1, countLayer(shapes, common.PC))
+	// 2 PC (vertPC + horizPC) + 1 M1 + contacts.
+	assert.Equal(t, 2, countLayer(shapes, common.PC))
 	assert.Equal(t, 1, countLayer(shapes, common.M1))
 	assert.Greater(t, countLayer(shapes, common.Contact), 0)
-	// The single M1 shape must be exactly the pin bbox.
+
+	// M1 must be exactly the pin bbox.
 	var m1 common.Shape
 	for _, s := range shapes {
 		if s.Layer == common.M1 {
@@ -185,9 +204,9 @@ func TestEscapePathShapes_Containment(t *testing.T) {
 	assert.Equal(t, pin.UpperRight, m1.UpperRight)
 }
 
-// TestEscapePathShapes_PCBelowPin_LShape: PC is below pin (Y gap) and to the left in X.
-// Expects vertSeg (pcX width, spanning pcY0..pinY1) + horizSeg (pinY height, pcX0..pinX1).
-func TestEscapePathShapes_PCBelowPin_LShape(t *testing.T) {
+// TestEscapePathShapes_PCBelowPin: PC is below and to the left of pin.
+// vertPC extends up to pin Y; horizPC covers pin X at pin Y. M1 is exactly m1Pin.
+func TestEscapePathShapes_PCBelowPin(t *testing.T) {
 	// PC: X=100..200, Y=0..100  (below and to the left)
 	// pin: X=400..600, Y=300..500
 	pc := common.Shape{
@@ -203,31 +222,43 @@ func TestEscapePathShapes_PCBelowPin_LShape(t *testing.T) {
 
 	shapes := escapePathShapes(pc, pin, testContactVC)
 
-	assert.Equal(t, 1, countLayer(shapes, common.PC))
-	assert.Equal(t, 2, countLayer(shapes, common.M1)) // vertSeg + horizSeg
+	assert.Equal(t, 2, countLayer(shapes, common.PC)) // vertPC + horizPC
+	assert.Equal(t, 1, countLayer(shapes, common.M1))
 	assert.Greater(t, countLayer(shapes, common.Contact), 0)
 
-	var vert, horiz common.Shape
+	// vertPC: original PC X width, extended up to pin Y.
+	// horizPC: at pin Y height, spanning from pcX0 to pinX1.
+	var vertPC, horizPC common.Shape
 	for _, s := range shapes {
-		if s.Layer != common.M1 {
+		if s.Layer != common.PC {
 			continue
 		}
 		if s.LowerLeft.X == 100 && s.UpperRight.X == 200 {
-			vert = s
+			vertPC = s
 		} else {
-			horiz = s
+			horizPC = s
 		}
 	}
-	// vertSeg: PC's X width, from pcY0=0 up to pinY1=500
-	assert.Equal(t, common.Point{X: 100, Y: 0}, vert.LowerLeft)
-	assert.Equal(t, common.Point{X: 200, Y: 500}, vert.UpperRight)
-	// horizSeg: pin's Y height, from pcX0=100 across to pinX1=600
-	assert.Equal(t, common.Point{X: 100, Y: 300}, horiz.LowerLeft)
-	assert.Equal(t, common.Point{X: 600, Y: 500}, horiz.UpperRight)
+	assert.Equal(t, common.Point{X: 100, Y: 0}, vertPC.LowerLeft)
+	assert.Equal(t, common.Point{X: 200, Y: 500}, vertPC.UpperRight) // extended up to pinY1
+
+	assert.Equal(t, common.Point{X: 100, Y: 300}, horizPC.LowerLeft) // pcX0..pinX1
+	assert.Equal(t, common.Point{X: 600, Y: 500}, horizPC.UpperRight)
+
+	// M1 is exactly the pin from cells.toml.
+	var m1Shape common.Shape
+	for _, s := range shapes {
+		if s.Layer == common.M1 {
+			m1Shape = s
+		}
+	}
+	assert.Equal(t, pin.LowerLeft, m1Shape.LowerLeft)
+	assert.Equal(t, pin.UpperRight, m1Shape.UpperRight)
 }
 
-// TestEscapePathShapes_PCAbovePin_LShape: PC is above pin (Y gap).
-func TestEscapePathShapes_PCAbovePin_LShape(t *testing.T) {
+// TestEscapePathShapes_PCAbovePin: PC is above and to the right of pin.
+// vertPC extends down to pin Y; horizPC covers pin X at pin Y. M1 is exactly m1Pin.
+func TestEscapePathShapes_PCAbovePin(t *testing.T) {
 	// PC: X=100..200, Y=600..700  (above and to the right)
 	// pin: X=0..150, Y=0..200
 	pc := common.Shape{
@@ -243,31 +274,43 @@ func TestEscapePathShapes_PCAbovePin_LShape(t *testing.T) {
 
 	shapes := escapePathShapes(pc, pin, testContactVC)
 
-	assert.Equal(t, 1, countLayer(shapes, common.PC))
-	assert.Equal(t, 2, countLayer(shapes, common.M1))
+	assert.Equal(t, 2, countLayer(shapes, common.PC)) // vertPC + horizPC
+	assert.Equal(t, 1, countLayer(shapes, common.M1))
 	assert.Greater(t, countLayer(shapes, common.Contact), 0)
 
-	var vert, horiz common.Shape
+	// vertPC: original PC X width, extended down to pin Y.
+	// horizPC: at pin Y height, spanning from pinX0 to pcX1.
+	var vertPC, horizPC common.Shape
 	for _, s := range shapes {
-		if s.Layer != common.M1 {
+		if s.Layer != common.PC {
 			continue
 		}
 		if s.LowerLeft.X == 100 && s.UpperRight.X == 200 {
-			vert = s
+			vertPC = s
 		} else {
-			horiz = s
+			horizPC = s
 		}
 	}
-	// vertSeg: PC's X width, from pinY0=0 down to pcY1=700
-	assert.Equal(t, common.Point{X: 100, Y: 0}, vert.LowerLeft)
-	assert.Equal(t, common.Point{X: 200, Y: 700}, vert.UpperRight)
-	// horizSeg: pin's Y height, from pinX0=0 to pcX1=200
-	assert.Equal(t, common.Point{X: 0, Y: 0}, horiz.LowerLeft)
-	assert.Equal(t, common.Point{X: 200, Y: 200}, horiz.UpperRight)
+	assert.Equal(t, common.Point{X: 100, Y: 0}, vertPC.LowerLeft)    // extended down to pinY0
+	assert.Equal(t, common.Point{X: 200, Y: 700}, vertPC.UpperRight)  // original pcY1 preserved
+
+	assert.Equal(t, common.Point{X: 0, Y: 0}, horizPC.LowerLeft)     // pinX0..pcX1
+	assert.Equal(t, common.Point{X: 200, Y: 200}, horizPC.UpperRight)
+
+	// M1 is exactly the pin from cells.toml.
+	var m1Shape common.Shape
+	for _, s := range shapes {
+		if s.Layer == common.M1 {
+			m1Shape = s
+		}
+	}
+	assert.Equal(t, pin.LowerLeft, m1Shape.LowerLeft)
+	assert.Equal(t, pin.UpperRight, m1Shape.UpperRight)
 }
 
 // TestEscapePathShapes_YOverlap_XGap: PC and pin overlap in Y but not in X.
-// No Y-gap vertical travel needed; still emits vertSeg (PC column) + horizSeg.
+// vertPC is the original PC (Y already covers pin Y); horizPC covers pin X at pin Y.
+// M1 is exactly m1Pin.
 func TestEscapePathShapes_YOverlap_XGap(t *testing.T) {
 	// PC: X=0..100, Y=200..400
 	// pin: X=300..500, Y=250..350  (Y overlaps, X gap)
@@ -284,19 +327,37 @@ func TestEscapePathShapes_YOverlap_XGap(t *testing.T) {
 
 	shapes := escapePathShapes(pc, pin, testContactVC)
 
-	assert.Equal(t, 1, countLayer(shapes, common.PC))
-	assert.Equal(t, 2, countLayer(shapes, common.M1))
+	assert.Equal(t, 2, countLayer(shapes, common.PC)) // vertPC + horizPC
+	assert.Equal(t, 1, countLayer(shapes, common.M1))
 	assert.Greater(t, countLayer(shapes, common.Contact), 0)
 
-	var horiz common.Shape
+	var vertPC, horizPC common.Shape
 	for _, s := range shapes {
-		if s.Layer == common.M1 && s.LowerLeft.Y == 250 {
-			horiz = s
+		if s.Layer != common.PC {
+			continue
+		}
+		if s.LowerLeft.X == 0 && s.UpperRight.X == 100 {
+			vertPC = s
+		} else {
+			horizPC = s
 		}
 	}
-	// horizSeg must span from pcX0=0 to pinX1=500 at pin's Y height
-	assert.Equal(t, common.Point{X: 0, Y: 250}, horiz.LowerLeft)
-	assert.Equal(t, common.Point{X: 500, Y: 350}, horiz.UpperRight)
+	// vertPC: unchanged (Y already covered)
+	assert.Equal(t, common.Point{X: 0, Y: 200}, vertPC.LowerLeft)
+	assert.Equal(t, common.Point{X: 100, Y: 400}, vertPC.UpperRight)
+	// horizPC: at pin Y, pcX0..pinX1
+	assert.Equal(t, common.Point{X: 0, Y: 250}, horizPC.LowerLeft)
+	assert.Equal(t, common.Point{X: 500, Y: 350}, horizPC.UpperRight)
+
+	// M1 is exactly the pin from cells.toml.
+	var m1Shape common.Shape
+	for _, s := range shapes {
+		if s.Layer == common.M1 {
+			m1Shape = s
+		}
+	}
+	assert.Equal(t, pin.LowerLeft, m1Shape.LowerLeft)
+	assert.Equal(t, pin.UpperRight, m1Shape.UpperRight)
 }
 
 // TestBuildEscapeShapes_LShape_TransformAndOffset: instance XY offset and orient
@@ -318,9 +379,9 @@ func TestBuildEscapeShapes_LShape_TransformAndOffset(t *testing.T) {
 	shapes, err := BuildEscapeShapes(layout, db, common.ViaConfig{})
 
 	require.NoError(t, err)
-	assert.Equal(t, 2, countLayer(shapes, common.M1)) // vertSeg + horizSeg
+	assert.Equal(t, 1, countLayer(shapes, common.M1)) // horizSeg only — no M1 through PC
 
-	// horizSeg must reach pinX1=1500 and cover pinY0..pinY1=2600..2800
+	// horizSeg must cover pin X range and sit at pin Y level.
 	var horiz common.Shape
 	for _, s := range shapes {
 		if s.Layer == common.M1 && s.LowerLeft.Y == 2600 {

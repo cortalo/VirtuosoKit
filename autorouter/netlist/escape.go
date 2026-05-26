@@ -20,7 +20,10 @@ func BuildEscapeShapes(layout Layout, db PinDB, contactVC common.ViaConfig) ([]c
 	var shapes []common.Shape
 	for _, inst := range layout.Instances {
 		isEscape, err := db.IsEscapeCell(inst.Lib, inst.Cell)
-		if err != nil || !isEscape {
+		if err != nil {
+			return nil, fmt.Errorf("netlist: instance %q: IsEscapeCell: %w", inst.Name, err)
+		}
+		if !isEscape {
 			continue
 		}
 		instX := int(math.Round(inst.XY[0] * 1000))
@@ -60,57 +63,32 @@ func BuildEscapeShapes(layout Layout, db PinDB, contactVC common.ViaConfig) ([]c
 	return shapes, nil
 }
 
-// escapePathShapes returns the PC shape, M1 escape metal, and Contact cuts
-// that connect pcShape (poly terminal, absolute coords) to m1Pin (cells.toml
-// escape target, already transformed and offset to absolute coords).
+// escapePathShapes returns an L-shaped PC path connecting pcShape to m1Pin,
+// the M1 pin exactly as defined in cells.toml, and Contact cuts at the overlap
+// of the horizontal PC bar and m1Pin.
 //
-// If pcShape completely contains m1Pin, only m1Pin and its contacts are added.
-// Otherwise an L-shaped M1 path is built:
-//   - a vertical segment at PC's X width, spanning vertically to include both
-//     PC and pin (so the two segments share an overlapping corner)
-//   - a horizontal segment at pin's Y height, spanning from the PC column to
-//     fully cover pin in X
+// The L-shape is two PC rectangles:
+//   - vertPC: original PC X width, Y extended to span both pcShape and m1Pin
+//   - horizPC: at m1Pin's Y level, X spanning from min(pcX0,pinX0) to max(pcX1,pinX1)
 //
-// Contacts are placed at the overlap of pcShape and the vertical segment.
+// M1 is always exactly m1Pin — never widened.
 func escapePathShapes(pcShape, m1Pin common.Shape, contactVC common.ViaConfig) []common.Shape {
 	pcX0, pcY0 := pcShape.LowerLeft.X, pcShape.LowerLeft.Y
 	pcX1, pcY1 := pcShape.UpperRight.X, pcShape.UpperRight.Y
 	pinX0, pinY0 := m1Pin.LowerLeft.X, m1Pin.LowerLeft.Y
 	pinX1, pinY1 := m1Pin.UpperRight.X, m1Pin.UpperRight.Y
 
-	out := []common.Shape{pcShape}
-
-	// Case 1: PC completely contains pin — just emit pin + contacts.
-	if pcX0 <= pinX0 && pcX1 >= pinX1 && pcY0 <= pinY0 && pcY1 >= pinY1 {
-		out = append(out, m1Pin)
-		return common.PlaceViaCuts(out, pcShape, m1Pin, contactVC, common.Contact, 0)
+	vertPC := common.Shape{
+		Layer:      common.PC,
+		LowerLeft:  common.Point{X: pcX0, Y: min(pcY0, pinY0)},
+		UpperRight: common.Point{X: pcX1, Y: max(pcY1, pinY1)},
 	}
-
-	// Case 2+3: L-shaped M1 path.
-	// Vertical M1 segment at PC's X width; its Y range covers both PC and pin
-	// so that it overlaps PC (for contacts) and shares area with horizSeg.
-	var vertY0, vertY1 int
-	switch {
-	case pcY0 > pinY1: // PC is above pin
-		vertY0, vertY1 = pinY0, pcY1
-	case pcY1 < pinY0: // PC is below pin
-		vertY0, vertY1 = pcY0, pinY1
-	default: // Y ranges already overlap
-		vertY0, vertY1 = pcY0, pcY1
-	}
-	vertSeg := common.Shape{
-		Layer:      common.M1,
-		LowerLeft:  common.Point{X: pcX0, Y: vertY0},
-		UpperRight: common.Point{X: pcX1, Y: vertY1},
-	}
-
-	// Horizontal M1 segment at pin's Y height, spanning from PC column to cover pin.
-	horizSeg := common.Shape{
-		Layer:      common.M1,
+	horizPC := common.Shape{
+		Layer:      common.PC,
 		LowerLeft:  common.Point{X: min(pcX0, pinX0), Y: pinY0},
 		UpperRight: common.Point{X: max(pcX1, pinX1), Y: pinY1},
 	}
 
-	out = append(out, vertSeg, horizSeg)
-	return common.PlaceViaCuts(out, pcShape, vertSeg, contactVC, common.Contact, 0)
+	out := []common.Shape{vertPC, horizPC, m1Pin}
+	return common.PlaceViaCuts(out, horizPC, m1Pin, contactVC, common.Contact, 0)
 }

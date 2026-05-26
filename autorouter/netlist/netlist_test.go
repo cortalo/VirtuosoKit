@@ -12,8 +12,9 @@ import (
 
 // stubDB implements PinDB for testing.
 type stubDB struct {
-	pins   map[string]stubPinData // key: "lib/cell/pin"
-	escape map[string]bool        // key: "lib/cell"
+	pins      map[string]stubPinData // key: "lib/cell/pin"
+	escape    map[string]bool        // key: "lib/cell"
+	escapeErr error                  // returned by IsEscapeCell when non-nil
 }
 
 type stubPinData struct {
@@ -29,6 +30,9 @@ func (db *stubDB) Query(lib, cell, pin string) (int, int, int, int, common.Layer
 }
 
 func (db *stubDB) IsEscapeCell(lib, cell string) (bool, error) {
+	if db.escapeErr != nil {
+		return false, db.escapeErr
+	}
 	return db.escape[lib+"/"+cell], nil
 }
 
