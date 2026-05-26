@@ -50,6 +50,8 @@ func (c *TwoLayerCanvas) Occupy(seg Segment) error {
 			return err
 		}
 		return c.M3Storage.Occupy(ts)
+	case common.M1:
+		return nil
 	default:
 		return ErrUnknownLayer
 	}
@@ -61,6 +63,8 @@ func (c *TwoLayerCanvas) dirForLayer(layer common.Layer) (common.Direction, erro
 		return common.Horizontal, nil
 	case common.M2:
 		return common.Vertical, nil
+	case common.M1:
+		return common.UnknownDirection, nil
 	default:
 		panic(ErrUnknownLayer)
 		return 0, ErrUnknownLayer

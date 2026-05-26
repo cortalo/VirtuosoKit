@@ -25,20 +25,41 @@ type Canvas interface {
 type DRCSpec = common.DRCSpec
 
 type TwoLayerRouter struct {
-	canvas  Canvas
-	m2Width int
-	m2DRC   DRCSpec
-	m3DRC   DRCSpec
+	canvas          Canvas
+	m2Width         int
+	m2DRC           DRCSpec
+	m3DRC           DRCSpec
+	widenNarrowPins bool
 }
 
 func NewTwoLayerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *TwoLayerRouter {
 	return &TwoLayerRouter{canvas: c, m2Width: m2Width, m2DRC: m2DRC, m3DRC: m3DRC}
 }
 
+func (r *TwoLayerRouter) SetWidenNarrowPins(v bool) {
+	r.widenNarrowPins = v
+}
+
 func (r *TwoLayerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
-	for _, pin := range pins {
+	var widenedM1s []Segment
+	for i, pin := range pins {
 		if !r.canvas.Inbound(Point{X: pin.XLow, Y: pin.YLow}) {
 			return nil, ErrOutOfBound
+		}
+		if r.widenNarrowPins && pin.XHigh-pin.XLow < r.m2Width {
+			center := (pin.XLow + pin.XHigh) / 2
+			pins[i].XLow = center - r.m2Width/2
+			pins[i].XHigh = center + r.m2Width/2
+			m1Seg, err := r.canvas.NewSeg(
+				common.M1,
+				Point{X: pins[i].XLow, Y: pin.YLow},
+				Point{X: pins[i].XHigh, Y: pin.YHigh},
+				netID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			widenedM1s = append(widenedM1s, m1Seg)
 		}
 	}
 
@@ -56,11 +77,11 @@ func (r *TwoLayerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) 
 
 	for delta := 0; (midTrack+delta <= maxTrack) || (midTrack-delta >= 0); delta++ {
 		if segs, ok := r.tryTrack(pins, netID, midTrack+delta); ok {
-			return segs, nil
+			return append(segs, widenedM1s...), nil
 		}
 		if delta > 0 {
 			if segs, ok := r.tryTrack(pins, netID, midTrack-delta); ok {
-				return segs, nil
+				return append(segs, widenedM1s...), nil
 			}
 		}
 	}

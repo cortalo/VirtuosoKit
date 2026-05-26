@@ -398,6 +398,89 @@ func TestRoute_FullOverlap_IgnoresMinPinOverlapRule(t *testing.T) {
 	assert.Equal(t, 500, m2Left.UpperRight.Y, "full-overlap M2 top at max(pin.YHigh, m3.GetUpper())")
 }
 
+// --- widen narrow pins ---
+
+// TestRoute_WidenNarrowPins_Disabled_PinUnchanged: default behaviour — narrow pin is not
+// widened and no M1 segment is appended.
+func TestRoute_WidenNarrowPins_Disabled_PinUnchanged(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 100, common.NoDRC{}, common.NoDRC{})
+
+	ps := []common.RoutingPin{
+		{XLow: 460, XHigh: 540, YLow: 100, YHigh: 200}, // width=80 < m2Width=100
+		{XLow: 400, XHigh: 600, YLow: 800, YHigh: 900}, // width=200, wide enough
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 460, ps[0].XLow, "pin must not be widened when flag is off")
+	assert.Equal(t, 540, ps[0].XHigh)
+	for _, s := range segs {
+		assert.NotEqual(t, common.M1, s.Layer, "no M1 segment expected")
+	}
+}
+
+// TestRoute_WidenNarrowPins_NarrowPin_CenteredAndM1Appended: narrow pin is centred and
+// widened to m2Width; a corresponding M1 segment is appended to the result.
+//
+// Canvas 1000x1000, m2Width=100. pin0: XLow=460, XHigh=540 (width=80, centre=500).
+// After widening: XLow=450, XHigh=550. M1 appended at X=[450,550], Y=[100,200].
+// pin1 is already wide (width=200) and must not be modified.
+func TestRoute_WidenNarrowPins_NarrowPin_CenteredAndM1Appended(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 100, common.NoDRC{}, common.NoDRC{})
+	r.SetWidenNarrowPins(true)
+
+	ps := []common.RoutingPin{
+		{XLow: 460, XHigh: 540, YLow: 100, YHigh: 200}, // width=80 < 100, centre=500
+		{XLow: 400, XHigh: 600, YLow: 800, YHigh: 900}, // width=200, unchanged
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+
+	// pin widened in-place, centred on original centre=500
+	assert.Equal(t, 450, ps[0].XLow)
+	assert.Equal(t, 550, ps[0].XHigh)
+	// wide pin untouched
+	assert.Equal(t, 400, ps[1].XLow)
+	assert.Equal(t, 600, ps[1].XHigh)
+
+	// exactly one M1 segment appended, matching the widened pin bbox
+	var m1s []common.Segment
+	for _, s := range segs {
+		if s.Layer == common.M1 {
+			m1s = append(m1s, s)
+		}
+	}
+	require.Len(t, m1s, 1)
+	assert.Equal(t, 450, m1s[0].LowerLeft.X)
+	assert.Equal(t, 550, m1s[0].UpperRight.X)
+	assert.Equal(t, 100, m1s[0].LowerLeft.Y)
+	assert.Equal(t, 200, m1s[0].UpperRight.Y)
+}
+
+// TestRoute_WidenNarrowPins_AlreadyWide_NotModified: pin whose width already equals or
+// exceeds m2Width is not touched and no extra M1 is appended.
+func TestRoute_WidenNarrowPins_AlreadyWide_NotModified(t *testing.T) {
+	c := newCanvas(1000, 1000, 100)
+	r := router.NewTwoLayerRouter(c, 100, common.NoDRC{}, common.NoDRC{})
+	r.SetWidenNarrowPins(true)
+
+	ps := []common.RoutingPin{
+		{XLow: 400, XHigh: 500, YLow: 100, YHigh: 200}, // width=100 == m2Width, not widened
+		{XLow: 400, XHigh: 600, YLow: 800, YHigh: 900}, // width=200 > m2Width, not widened
+	}
+	segs, err := r.Route(ps, 1)
+
+	require.NoError(t, err)
+	assert.Equal(t, 400, ps[0].XLow)
+	assert.Equal(t, 500, ps[0].XHigh)
+	for _, s := range segs {
+		assert.NotEqual(t, common.M1, s.Layer)
+	}
+}
+
 // --- min space ---
 
 // Pre-occupy M3 at X=[0,55] on track 5. The M3 segment runs from X=100 to X=901,

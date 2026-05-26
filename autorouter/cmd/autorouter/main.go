@@ -153,6 +153,7 @@ func main() {
 	var powerNets ignoreNetFlag
 	flag.Var(&powerNets, "power-net", "net name to route with PowerRouter (repeatable, e.g. -power-net VDD -power-net VSS)")
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
+	widenNarrowPins := flag.Bool("widen-narrow-pins", false, "widen M1 pins narrower than m2-width to m2-width, centered on the pin (classic mode)")
 	flag.Parse()
 
 	drcsP, err := drcsPath()
@@ -208,7 +209,9 @@ func main() {
 			M2Storage:  canvas.NewSegmentStore(ll, ur),
 			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
 		}
-		c, r, rc = tlc, router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC), tlc
+		tlr := router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC)
+		tlr.SetWidenNarrowPins(*widenNarrowPins)
+		c, r, rc = tlc, tlr, tlc
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "mode: classic  m3-tracks=%d\n", m3TrackCount)
 		}
