@@ -178,6 +178,21 @@ func TestIntegration_PowerNet_NoPowerRouterSet_FallsBackToRegularRouter(t *testi
 	assert.False(t, hasM2Bus(results[0].Shapes, 1000), "without SetPowerRouter, VDD uses regular router")
 }
 
+// TestIntegration_TwoPowerNets_NoPanic reproduces a panic that occurred when two
+// power nets (VDD and VSS) were both routed by PowerRouter. Each call to
+// PowerRouter.Route places a full-height M2 bus at the same left-edge X
+// position but with a different netID. The second bus fails IsPassible
+// (different-netID overlap) → Occupy returns ErrOverlap → lo.Must0 panics.
+func TestIntegration_TwoPowerNets_NoPanic(t *testing.T) {
+	nets := []*common.Net{
+		{ID: 1, Name: "VDD", Pins: []common.RoutingPin{pin(300, 800)}},
+		{ID: 2, Name: "VSS", Pins: []common.RoutingPin{pin(700, 200)}},
+	}
+	s := newIntegrationSessionWithPower(nets, "VDD", "VSS")
+
+	assert.NotPanics(t, func() { s.Route() })
+}
+
 func TestIntegration_ThreePinNet_RouteSucceeds(t *testing.T) {
 	nets := []*common.Net{
 		{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(500, 900), pin(900, 200)}},

@@ -6,10 +6,11 @@ import "autorouter/common"
 // at the left edge of the canvas. Each pin is connected to its nearest M3 track,
 // and all M3 tracks are tied together by the vertical M2 bus.
 type PowerRouter struct {
-	canvas  Canvas
-	m2Width int
-	m2DRC   DRCSpec
-	m3DRC   DRCSpec
+	canvas          Canvas
+	m2Width         int
+	m2DRC           DRCSpec
+	m3DRC           DRCSpec
+	widenNarrowPins bool
 }
 
 func NewPowerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *PowerRouter {
@@ -21,9 +22,32 @@ func NewPowerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *PowerRouter {
 	}
 }
 
+func (r *PowerRouter) SetWidenNarrowPins(v bool) {
+	r.widenNarrowPins = v
+}
+
 // Route returns segments in the order: [m2stub_0, ..., m2stub_N-1, m3_0, ..., m3_N-1, m2bus].
 // The first N segments are the M2 stubs in pin order, matching the convention of other routers.
 func (r *PowerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
+	var widenedM1s []Segment
+	for i, pin := range pins {
+		if r.widenNarrowPins && pin.XHigh-pin.XLow < r.m2Width {
+			center := (pin.XLow + pin.XHigh) / 2
+			pins[i].XLow = center - r.m2Width/2
+			pins[i].XHigh = center + r.m2Width/2
+			m1Seg, err := r.canvas.NewSeg(
+				common.M1,
+				Point{X: pins[i].XLow, Y: pin.YLow},
+				Point{X: pins[i].XHigh, Y: pin.YHigh},
+				netID,
+			)
+			if err != nil {
+				return nil, err
+			}
+			widenedM1s = append(widenedM1s, m1Seg)
+		}
+	}
+
 	origin := r.canvas.GetLowerLeft()
 	upperRight := r.canvas.GetUpperRight()
 	m3tw := r.canvas.GetTrackWidth(common.M3)
@@ -54,21 +78,30 @@ func (r *PowerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
 		}
 	}
 
-	// Full-height M2 bus at left edge connects all power M3 tracks together.
-	bus, err := r.canvas.NewSeg(
-		common.M2,
-		Point{X: origin.X, Y: origin.Y},
-		Point{X: origin.X + r.m2Width, Y: upperRight.Y},
-		netID,
-	)
-	if err != nil {
+	// Find the leftmost viable M2 bus column, stepping by 2*m2Width so
+	// successive power nets each get their own non-overlapping column.
+	var bus Segment
+	for busX := origin.X; busX+r.m2Width <= upperRight.X; busX += 2 * r.m2Width {
+		candidate, err := r.canvas.NewSeg(
+			common.M2,
+			Point{X: busX, Y: origin.Y},
+			Point{X: busX + r.m2Width, Y: upperRight.Y},
+			netID,
+		)
+		if err == nil && r.canvas.IsPassible(candidate) {
+			bus = candidate
+			break
+		}
+	}
+	if bus == (Segment{}) {
 		return nil, ErrNoPath
 	}
 
-	result := make([]Segment, 0, 2*len(pins)+1)
+	result := make([]Segment, 0, 2*len(pins)+1+len(widenedM1s))
 	result = append(result, m2Stubs...)
 	result = append(result, m3Segs...)
 	result = append(result, bus)
+	result = append(result, widenedM1s...)
 	return result, nil
 }
 

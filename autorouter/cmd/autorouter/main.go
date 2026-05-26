@@ -251,6 +251,7 @@ func main() {
 	s := session.NewSession(c, r, nl, via12, via23, m2DRC, m3DRC)
 	if len(powerNets) > 0 {
 		pr := router.NewPowerRouter(rc, *m2Width, m2DRC, m3DRC)
+		pr.SetWidenNarrowPins(*widenNarrowPins)
 		s.SetPowerRouter(pr, powerNets...)
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "power nets: %s\n", strings.Join(powerNets, ", "))
