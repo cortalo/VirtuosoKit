@@ -30,6 +30,7 @@ type Metal struct {
 type cell struct {
 	Pins   []Pin   `toml:"pins"`
 	Metals []Metal `toml:"metals"`
+	Escape bool    `toml:"escape"` // if true, pin ll/ur values are escape targets; actual geometry comes from layout JSON
 }
 
 type DB struct {
@@ -42,6 +43,18 @@ func Load(path string) (*DB, error) {
 		return nil, fmt.Errorf("celldb: %w", err)
 	}
 	return &DB{libs: raw}, nil
+}
+
+func (db *DB) IsEscapeCell(lib, cellName string) (bool, error) {
+	cells, ok := db.libs[lib]
+	if !ok {
+		return false, fmt.Errorf("%w: %s", ErrLibNotFound, lib)
+	}
+	c, ok := cells[cellName]
+	if !ok {
+		return false, fmt.Errorf("%w: %s", ErrCellNotFound, cellName)
+	}
+	return c.Escape, nil
 }
 
 func (db *DB) QueryMetals(lib, cellName string) ([]Metal, error) {

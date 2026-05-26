@@ -114,6 +114,7 @@ func expandSchematicInstances(instances []SchematicInstance) []SchematicInstance
 
 type PinDB interface {
 	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error)
+	IsEscapeCell(lib, cell string) (bool, error)
 }
 
 // Layout mirrors the layout JSON structure.
@@ -127,12 +128,18 @@ type LayoutShape struct {
 	BBox  [2][2]float64 `json:"bbox"`
 }
 
+type TerminalInfo struct {
+	Layer string        `json:"layer"`
+	Bbox  [2][2]float64 `json:"bbox"` // absolute coordinates [[xLow,yLow],[xHigh,yHigh]] in µm
+}
+
 type LayoutInstance struct {
-	Name   string     `json:"name"`
-	Lib    string     `json:"lib"`
-	Cell   string     `json:"cell"`
-	XY     [2]float64 `json:"xy"`
-	Orient string     `json:"orient"`
+	Name      string                  `json:"name"`
+	Lib       string                  `json:"lib"`
+	Cell      string                  `json:"cell"`
+	XY        [2]float64              `json:"xy"`
+	Orient    string                  `json:"orient"`
+	Terminals map[string]TerminalInfo `json:"terminals,omitempty"`
 }
 
 // Schematic mirrors the schematic JSON structure.
@@ -270,10 +277,37 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			if _, skip := ignoredLibs[inst.Lib]; skip {
 				continue
 			}
+			isEscape, ierr := db.IsEscapeCell(inst.Lib, inst.Cell)
+			if ierr != nil {
+				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, ierr)
+				return
+			}
 			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
-				err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
-				return
+				if !isEscape {
+					err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
+					return
+				}
+				term, hasTerm := inst.Terminals[parts[1]]
+				if !hasTerm {
+					err = fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
+					return
+				}
+				termLayer, lerr := common.ParseLayer(term.Layer)
+				if lerr != nil {
+					err = fmt.Errorf("netlist: net %q pin %q: terminal layer %q: %w", name, instPin, term.Layer, lerr)
+					return
+				}
+				_, isMinOverlap := minOverlapLibSet[inst.Lib]
+				pins = append(pins, common.RoutingPin{
+					Layer:      termLayer,
+					XLow:       int(math.Round(term.Bbox[0][0] * 1000)),
+					YLow:       int(math.Round(term.Bbox[0][1] * 1000)),
+					XHigh:      int(math.Round(term.Bbox[1][0] * 1000)),
+					YHigh:      int(math.Round(term.Bbox[1][1] * 1000)),
+					MinOverlap: isMinOverlap,
+				})
+				continue
 			}
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))
@@ -324,10 +358,36 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 				err = fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
 				return
 			}
+			isEscape, ierr := db.IsEscapeCell(inst.Lib, inst.Cell)
+			if ierr != nil {
+				err = fmt.Errorf("netlist: pin %q: %w", name, ierr)
+				return
+			}
 			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
-				err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
-				return
+				if !isEscape {
+					err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
+					return
+				}
+				term, hasTerm := inst.Terminals[parts[1]]
+				if !hasTerm {
+					err = fmt.Errorf("netlist: pin %q: %w", name, qerr)
+					return
+				}
+				termLayer, lerr := common.ParseLayer(term.Layer)
+				if lerr != nil {
+					err = fmt.Errorf("netlist: pin %q: terminal layer %q: %w", name, term.Layer, lerr)
+					return
+				}
+				layoutPins = append(layoutPins, &common.RoutingPin{
+					Name:  name,
+					Layer: termLayer,
+					XLow:  int(math.Round(term.Bbox[0][0] * 1000)),
+					YLow:  int(math.Round(term.Bbox[0][1] * 1000)),
+					XHigh: int(math.Round(term.Bbox[1][0] * 1000)),
+					YHigh: int(math.Round(term.Bbox[1][1] * 1000)),
+				})
+				continue
 			}
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))

@@ -20,7 +20,8 @@ type Point struct {
 type Layer int
 
 const (
-	M1 Layer = iota + 1
+	PC Layer = iota + 1
+	M1
 	M2
 	M3
 	Via12
@@ -29,6 +30,8 @@ const (
 
 func (l Layer) MarshalJSON() ([]byte, error) {
 	switch l {
+	case PC:
+		return json.Marshal("PC")
 	case M1:
 		return json.Marshal("M1")
 	case M2:
@@ -46,6 +49,8 @@ func (l Layer) MarshalJSON() ([]byte, error) {
 
 func ParseLayer(s string) (Layer, error) {
 	switch s {
+	case "PC":
+		return PC, nil
 	case "M1":
 		return M1, nil
 	case "M2":
