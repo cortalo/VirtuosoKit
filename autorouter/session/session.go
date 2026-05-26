@@ -134,48 +134,15 @@ func (s *Session) Route() []NetResult {
 // appendViaCuts detects the via type from a.Layer/b.Layer and places via cuts
 // in the overlap region. Unrecognised layer combinations are a no-op.
 func (s *Session) appendViaCuts(shapes []Shape, a, b Shape) []Shape {
-	var vc ViaConfig
-	var layer common.Layer
-	var endExt int
-
 	la, lb := a.Layer, b.Layer
 	switch {
 	case (la == common.M1 && lb == common.M2) || (la == common.M2 && lb == common.M1):
-		vc, layer, endExt = s.via12, common.Via12, s.m2DRC.ViaEnclosure()
+		return common.PlaceViaCuts(shapes, a, b, s.via12, common.Via12, s.m2DRC.ViaEnclosure())
 	case (la == common.M2 && lb == common.M3) || (la == common.M3 && lb == common.M2):
-		vc, layer, endExt = s.via23, common.Via23, max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure())
+		return common.PlaceViaCuts(shapes, a, b, s.via23, common.Via23, max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure()))
 	default:
 		return shapes
 	}
-
-	if vc.CutW == 0 || vc.CutH == 0 {
-		return shapes
-	}
-	x0 := max(a.LowerLeft.X, b.LowerLeft.X) + endExt
-	y0 := max(a.LowerLeft.Y, b.LowerLeft.Y) + endExt
-	x1 := min(a.UpperRight.X, b.UpperRight.X) - endExt
-	y1 := min(a.UpperRight.Y, b.UpperRight.Y) - endExt
-	if x0 >= x1 || y0 >= y1 {
-		return shapes
-	}
-	w, h := x1-x0, y1-y0
-	cols := max(1, (w+vc.SpaceX)/(vc.CutW+vc.SpaceX))
-	rows := max(1, (h+vc.SpaceY)/(vc.CutH+vc.SpaceY))
-	startX := (x0+x1)/2 - (cols*vc.CutW+(cols-1)*vc.SpaceX)/2
-	startY := (y0+y1)/2 - (rows*vc.CutH+(rows-1)*vc.SpaceY)/2
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
-			llx := startX + c*(vc.CutW+vc.SpaceX)
-			lly := startY + r*(vc.CutH+vc.SpaceY)
-			shapes = append(shapes, Shape{
-				LowerLeft:  Point{X: llx, Y: lly},
-				UpperRight: Point{X: llx + vc.CutW, Y: lly + vc.CutH},
-				Layer:      layer,
-				NetID:      a.NetID,
-			})
-		}
-	}
-	return shapes
 }
 
 func pinBBox(pin RoutingPin) Shape {
