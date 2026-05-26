@@ -121,6 +121,63 @@ func TestIntegration_PinBBoxExtension_M2OverlapPanic(t *testing.T) {
 	assert.NotPanics(t, func() { s.Route() })
 }
 
+// hasM2Bus reports whether shapes contains the full-height M2 bus produced by PowerRouter.
+func hasM2Bus(shapes []session.Shape, canvasHeight int) bool {
+	for _, sh := range shapes {
+		if sh.Layer == common.M2 && sh.LowerLeft.X == 0 && sh.UpperRight.Y == canvasHeight {
+			return true
+		}
+	}
+	return false
+}
+
+func newIntegrationSessionWithPower(nets []*common.Net, powerNetNames ...string) *session.Session {
+	c := &canvas.TwoLayerCanvas{
+		LowerLeft:  common.Point{X: 0, Y: 0},
+		UpperRight: common.Point{X: 1000, Y: 1000},
+		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1000}),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+	}
+	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
+	pr := router.NewPowerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
+	nl := &common.Netlist{Nets: nets}
+	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
+	s.SetPowerRouter(pr, powerNetNames...)
+	return s
+}
+
+// TestIntegration_PowerNet_UsesPowerRouter: VDD net gets M2 bus; signal net does not.
+func TestIntegration_PowerNet_UsesPowerRouter(t *testing.T) {
+	nets := []*common.Net{
+		{ID: 1, Name: "VDD", Pins: []common.RoutingPin{pin(300, 800), pin(700, 200)}},
+		{ID: 2, Name: "sig", Pins: []common.RoutingPin{pin(100, 100), pin(900, 500)}},
+	}
+	s := newIntegrationSessionWithPower(nets, "VDD")
+
+	results := s.Route()
+
+	require.Len(t, results, 2)
+	assert.NoError(t, results[0].Err)
+	assert.NoError(t, results[1].Err)
+	assert.True(t, hasM2Bus(results[0].Shapes, 1000), "VDD net must have M2 bus from PowerRouter")
+	assert.False(t, hasM2Bus(results[1].Shapes, 1000), "signal net must not have M2 bus")
+}
+
+// TestIntegration_PowerNet_NoPowerRouterSet_FallsBackToRegularRouter: if SetPowerRouter
+// was not called, power-named nets are routed by the regular router (no M2 bus).
+func TestIntegration_PowerNet_NoPowerRouterSet_FallsBackToRegularRouter(t *testing.T) {
+	nets := []*common.Net{
+		{ID: 1, Name: "VDD", Pins: []common.RoutingPin{pin(100, 100), pin(900, 900)}},
+	}
+	s := newIntegrationSession(nets) // no SetPowerRouter
+
+	results := s.Route()
+
+	require.Len(t, results, 1)
+	assert.NoError(t, results[0].Err)
+	assert.False(t, hasM2Bus(results[0].Shapes, 1000), "without SetPowerRouter, VDD uses regular router")
+}
+
 func TestIntegration_ThreePinNet_RouteSucceeds(t *testing.T) {
 	nets := []*common.Net{
 		{ID: 1, Pins: []common.RoutingPin{pin(100, 100), pin(500, 900), pin(900, 200)}},

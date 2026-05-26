@@ -26,13 +26,15 @@ type Router interface {
 }
 
 type Session struct {
-	canvas  Canvas
-	router  Router
-	netlist *Netlist
-	via12   ViaConfig
-	via23   ViaConfig
-	m2DRC   DRCSpec
-	m3DRC   DRCSpec
+	canvas      Canvas
+	router      Router
+	powerRouter Router
+	powerNets   map[string]bool
+	netlist     *Netlist
+	via12       ViaConfig
+	via23       ViaConfig
+	m2DRC       DRCSpec
+	m3DRC       DRCSpec
 }
 
 func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 ViaConfig, m2DRC, m3DRC DRCSpec) *Session {
@@ -44,6 +46,14 @@ func NewSession(canvas Canvas, router Router, netlist *Netlist, via12, via23 Via
 		via23:   via23,
 		m2DRC:   m2DRC,
 		m3DRC:   m3DRC,
+	}
+}
+
+func (s *Session) SetPowerRouter(r Router, netNames ...string) {
+	s.powerRouter = r
+	s.powerNets = make(map[string]bool, len(netNames))
+	for _, name := range netNames {
+		s.powerNets[name] = true
 	}
 }
 
@@ -72,8 +82,15 @@ func (s *Session) Route() []NetResult {
 	results := make([]NetResult, len(s.netlist.Nets))
 
 	for i, net := range s.netlist.Nets {
+		r := s.router
+		if s.powerNets[net.Name] {
+			if s.powerRouter == nil {
+				panic("power net " + net.Name + " requires powerRouter but none is set via SetPowerRouter")
+			}
+			r = s.powerRouter
+		}
 		// The first len(net.Pins) segments connect each pin's M1 bbox to M2.
-		segs, err := s.router.Route(net.Pins, net.ID)
+		segs, err := r.Route(net.Pins, net.ID)
 		if err != nil {
 			results[i] = NetResult{NetID: net.ID, NetName: net.Name, Err: err}
 			continue

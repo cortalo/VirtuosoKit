@@ -150,6 +150,8 @@ func main() {
 	flag.Var(&ignoreLibs, "ignore-lib", "lib name whose instances are excluded from routing (repeatable, e.g. -ignore-lib analogLib)")
 	var minOverlapLibs ignoreNetFlag
 	flag.Var(&minOverlapLibs, "min-overlap-lib", "lib name whose pins use minimum M2 overlap (repeatable, e.g. -min-overlap-lib stdcellLib)")
+	var powerNets ignoreNetFlag
+	flag.Var(&powerNets, "power-net", "net name to route with PowerRouter (repeatable, e.g. -power-net VDD -power-net VSS)")
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	flag.Parse()
 
@@ -195,6 +197,7 @@ func main() {
 
 	var c session.Canvas
 	var r session.Router
+	var rc router.Canvas
 	switch *mode {
 	case "classic":
 		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
@@ -204,7 +207,7 @@ func main() {
 			M2Storage:  canvas.NewSegmentStore(ll, ur),
 			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
 		}
-		c, r = tlc, router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC)
+		c, r, rc = tlc, router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC), tlc
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "mode: classic  m3-tracks=%d\n", m3TrackCount)
 		}
@@ -224,7 +227,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: build canvas: %v\n", err)
 			os.Exit(1)
 		}
-		c, r = ftc, router.NewFullTrackRouter(ftc, dir, m2DRC, m3DRC)
+		c, r, rc = ftc, router.NewFullTrackRouter(ftc, dir, m2DRC, m3DRC), ftc
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "mode: full-track  m2-tracks=%d m3-tracks=%d m2-dir=%s instances=%d\n",
 				m2TrackCount, m3TrackCount, *m2Dir, len(canvasInsts))
@@ -242,6 +245,13 @@ func main() {
 	}
 
 	s := session.NewSession(c, r, nl, via12, via23, m2DRC, m3DRC)
+	if len(powerNets) > 0 {
+		pr := router.NewPowerRouter(rc, *m2Width, m2DRC, m3DRC)
+		s.SetPowerRouter(pr, powerNets...)
+		if *verbose {
+			fmt.Fprintf(os.Stderr, "power nets: %s\n", strings.Join(powerNets, ", "))
+		}
+	}
 	routes := s.Route()
 
 	if *verbose {
