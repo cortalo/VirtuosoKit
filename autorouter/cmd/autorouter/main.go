@@ -194,6 +194,7 @@ func main() {
 	m3DRC := loadDRCSpec(drcDB, *processLib, "M3")
 	via12 := loadViaConfig(drcDB, *processLib, "Via12")
 	via23 := loadViaConfig(drcDB, *processLib, "Via23")
+	contactVC := loadViaConfig(drcDB, *processLib, "Contact")
 
 	var c session.Canvas
 	var r session.Router
@@ -253,6 +254,15 @@ func main() {
 		}
 	}
 	routes := s.Route()
+
+	escapeShapes, err := netlist.BuildEscapeShapes(req.Layout, db, contactVC)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: build escape shapes: %v\n", err)
+		os.Exit(1)
+	}
+	if len(escapeShapes) > 0 {
+		routes = append(routes, session.NetResult{Shapes: escapeShapes})
+	}
 
 	if *verbose {
 		ok := 0
