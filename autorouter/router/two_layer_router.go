@@ -105,11 +105,10 @@ func (r *TwoLayerRouter) m3Passible(ts TrackSegment) bool {
 }
 
 func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segment, bool) {
-	xLows := lo.Map(pins, func(p RoutingPin, _ int) int { return p.XLow })
-	minX := lo.Min(xLows)
-	maxX := lo.Max(xLows)
+	minX := lo.Min(lo.Map(pins, func(p RoutingPin, _ int) int { return p.XLow }))
+	maxXRight := lo.Max(lo.Map(pins, func(p RoutingPin, _ int) int { return max(p.XHigh, p.XLow+r.m2Width) }))
 
-	m3Lo, m3Hi := r.m3DRC.ApplyEndExtension(minX, maxX+r.m2Width)
+	m3Lo, m3Hi := r.m3DRC.ApplyEndExtension(minX, maxXRight)
 	m3, err := r.canvas.NewTrack(common.M3, trackID, m3Lo, m3Hi, netID)
 	if err != nil {
 		return nil, false
@@ -118,16 +117,37 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 		return nil, false
 	}
 
+	step := r.m2Width / 2
+	if step == 0 {
+		step = 1
+	}
+
 	m2Segs := make([]Segment, len(pins))
 	for i, pin := range pins {
-		m2Lo, m2Hi := r.m2DRC.ApplyEndExtension(r.pinM2Bounds(pin, m3))
-		m2Segs[i], err = r.canvas.NewSeg(
-			common.M2,
-			Point{X: pin.XLow, Y: m2Lo},
-			Point{X: pin.XLow + r.m2Width, Y: m2Hi},
-			netID,
-		)
-		if err != nil || !r.m2Passible(m2Segs[i]) {
+		m2Lo, m2Hi, narrowErr := r.pinM2Bounds(pin, m3)
+		m2Lo, m2Hi = r.m2DRC.ApplyEndExtension(m2Lo, m2Hi)
+
+		xMax := pin.XLow // narrow pin: only try XLow
+		if narrowErr == nil {
+			xMax = pin.XHigh - r.m2Width
+		}
+
+		found := false
+		for xLow := pin.XLow; xLow <= xMax; xLow += step {
+			seg, segErr := r.canvas.NewSeg(
+				common.M2,
+				Point{X: xLow, Y: m2Lo},
+				Point{X: xLow + r.m2Width, Y: m2Hi},
+				netID,
+			)
+			if segErr != nil || !r.m2Passible(seg) {
+				continue
+			}
+			m2Segs[i] = seg
+			found = true
+			break
+		}
+		if !found {
 			return nil, false
 		}
 	}
@@ -136,7 +156,7 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 		m2Horiz, err := r.canvas.NewSeg(
 			common.M2,
 			Point{X: minX, Y: m3.GetLower()},
-			Point{X: maxX + r.m2Width, Y: m3.GetUpper()},
+			Point{X: maxXRight, Y: m3.GetUpper()},
 			netID,
 		)
 		if err != nil || !r.m2Passible(m2Horiz) {
@@ -149,25 +169,20 @@ func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segm
 }
 
 // pinM2Bounds returns the raw (before end-extension) Y range for the M2 stub
-// connecting pin to m3. When pin.MinOverlap is set and MinPinOverlap() > 0,
-// M2 enters the pin bbox by only MinPinOverlap() nm from the nearest edge;
-// otherwise the full pin height is covered.
-func (r *TwoLayerRouter) pinM2Bounds(pin RoutingPin, m3 TrackSegment) (lo, hi int) {
+// connecting pin to m3, and errPinTooNarrow if pin.XHigh-pin.XLow < m2Width
+// (caller should not attempt to slide the stub in that case).
+func (r *TwoLayerRouter) pinM2Bounds(pin RoutingPin, m3 TrackSegment) (lo, hi int, err error) {
+	if pin.XHigh-pin.XLow < r.m2Width {
+		err = errPinTooNarrow
+	}
 	minOv := r.m2DRC.MinPinOverlap()
 	if pin.MinOverlap && minOv > 0 {
 		pinCenterY := (pin.YLow + pin.YHigh) / 2
 		m3CenterY := (m3.GetLower() + m3.GetUpper()) / 2
 		if pinCenterY <= m3CenterY {
-			// pin center is below M3 center: enter from the near (top) edge of the pin.
-			// Cap the entry point at m3.GetUpper() so the overlap is measured against the
-			// actual M2 top, not a pin.YHigh that extends past the M3 track.
-			// Also clamp lo to at most m3.GetLower() so M2 always covers the full M3 track.
-			return min(m3.GetLower(), max(pin.YLow, min(pin.YHigh, m3.GetUpper())-minOv)), m3.GetUpper()
+			return min(m3.GetLower(), max(pin.YLow, min(pin.YHigh, m3.GetUpper())-minOv)), m3.GetUpper(), err
 		}
-		// pin center is above M3 center: enter from the near (bottom) edge of the pin.
-		// Cap the entry point at m3.GetLower() symmetrically.
-		// Also clamp hi to at least m3.GetUpper() so M2 always covers the full M3 track.
-		return m3.GetLower(), max(m3.GetUpper(), min(pin.YHigh, max(pin.YLow, m3.GetLower())+minOv))
+		return m3.GetLower(), max(m3.GetUpper(), min(pin.YHigh, max(pin.YLow, m3.GetLower())+minOv)), err
 	}
-	return min(pin.YLow, m3.GetLower()), max(pin.YHigh, m3.GetUpper())
+	return min(pin.YLow, m3.GetLower()), max(pin.YHigh, m3.GetUpper()), err
 }

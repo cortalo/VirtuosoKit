@@ -113,9 +113,9 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 	assert.Equal(t, 4800, m2I.LowerLeft.X, "I1.I MY flips X: 5000-200=4800")
 	assert.Equal(t, 300, m2I.UpperRight.Y, "I1.I M2 extended to cover pin YHigh=300")
 
-	// M3 spans from the leftmost pin X (800) to the rightmost pin X + m2Width (4801).
+	// M3 spans from the leftmost pin XLow (800) to the rightmost pin XHigh (4900).
 	assert.Equal(t, 800, m3Segs[0].LowerLeft.X, "M3 starts at I0.ZN XLow")
-	assert.Equal(t, 4801, m3Segs[0].UpperRight.X, "M3 ends at I1.I XLow + m2Width")
+	assert.Equal(t, 4900, m3Segs[0].UpperRight.X, "M3 ends at I1.I XHigh")
 }
 
 // Canvas: 1000x1000, trackWidth=100 (10 tracks).
