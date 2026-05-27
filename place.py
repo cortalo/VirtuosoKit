@@ -4,10 +4,10 @@ Build the binary first:
     cd placer && go build -o bin/placer ./cmd/placer/
 
 Usage:
-    python place.py <lib> <cell> [options]
+    python place.py <lib> <cell> --row-height <NM> [options]
 
 Example:
-    python place.py test inv_2 --ignore-lib basic
+    python place.py mylib myinv --row-height <ROW_HEIGHT_NM>
 """
 
 import argparse
@@ -81,14 +81,17 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("lib",  help="Virtuoso library name")
     p.add_argument("cell", help="Virtuoso cell name")
-    p.add_argument("--row-height", type=int, default=3920, metavar="NM",
-                   help="Standard cell row height in nm (default: 3920)")
+    p.add_argument("--row-height", type=int, required=True, metavar="NM",
+                   help="Standard cell row height in nm (PDK-specific, matches the physical cell height)")
     p.add_argument("--row-threshold", type=float, default=1.0, metavar="UNITS",
                    help="Y gap threshold in schematic units for row detection (default: 1.0)")
+    p.add_argument("--target-width", type=int, default=0, metavar="NM",
+                   help="Maximum row width in nm; splits and repacks rows to fit; 0 disables (default: 0)")
     p.add_argument("--pr-margin", type=int, default=10000, metavar="NM",
                    help="prBoundary margin around instances in nm (default: 10000 = 10 um)")
-    p.add_argument("--ignore-lib", action="append", default=[], metavar="LIB",
-                   help="Library whose instances are excluded from placement (repeatable)")
+    p.add_argument("--ignore-lib", action="append", default=["basic"], metavar="LIB",
+                   help="Cadence infrastructure library (e.g. basic, analoglib) whose instances have no "
+                        "layout and must be skipped during placement (repeatable, default: basic)")
     p.add_argument("--port", type=int, default=65432,
                    help="Virtuoso bridge TCP port (default: 65432)")
     p.add_argument("--binary", type=Path, default=DEFAULT_BINARY,
@@ -112,14 +115,12 @@ def main() -> int:
 
     client = VirtuosoClient.local(port=args.port)
 
-    # Check if layout already exists before doing any work
     if layout_exists(client, args.lib, args.cell):
         answer = input(f"Layout {args.lib}/{args.cell} already exists. Delete and recreate? [y/N] ")
         if answer.strip().lower() != "y":
             print("Aborted.")
             return 0
 
-    # Read schematic instance positions
     data = read_schematic(client, args.lib, args.cell, include_positions=True)
     payload = {
         "instances": [
@@ -135,11 +136,11 @@ def main() -> int:
         ]
     }
 
-    # Run placer
     cmd = [
         str(args.binary),
         f"-row-height={args.row_height}",
         f"-row-threshold={args.row_threshold}",
+        f"-target-width={args.target_width}",
         *[f"-ignore-lib={l}" for l in args.ignore_lib],
         *(["-verbose"] if args.verbose else []),
     ]
@@ -155,19 +156,29 @@ def main() -> int:
             print(proc.stderr, file=sys.stderr)
         return proc.returncode
 
-    instances = json.loads(proc.stdout)["instances"]
-    print(f"Placed {len(instances)} instances")
+    placer_out = json.loads(proc.stdout)
+    instances = placer_out["instances"]
+    num_rows = placer_out["num_rows"]
+    print(f"Placed {len(instances)} instances in {num_rows} row(s)")
     if args.verbose:
         for inst in instances:
             print(f"  {inst['name']:20s}  ({nm_to_um(inst['x']):.3f}, {nm_to_um(inst['y']):.3f}) um  {inst['orient']}", file=sys.stderr)
 
-    # Delete old layout if it existed
     if layout_exists(client, args.lib, args.cell):
         delete_layout(client, args.lib, args.cell)
 
-    # Create layout
     create_layout(client, args.lib, args.cell, instances, args.pr_margin)
     print(f"Created layout {args.lib}/{args.cell} with {len(instances)} instances.")
+
+    xs = [inst["x"] for inst in instances]
+    ys = [inst["y"] for inst in instances]
+    print(
+        f"PLACEMENT_SUMMARY "
+        f"inst_min_x={min(xs)} inst_max_x={max(xs)} "
+        f"inst_min_y={min(ys)} inst_max_y={max(ys)} "
+        f"num_rows={num_rows} "
+        f"pr_llx={min(xs) - args.pr_margin} pr_urx={max(xs) + args.pr_margin}"
+    )
     return 0
 
 

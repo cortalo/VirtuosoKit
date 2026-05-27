@@ -4,12 +4,12 @@ Build the binary first:
     cd autorouter && go build -o bin/autorouter ./cmd/autorouter/
 
 Usage:
-    python route.py <lib> <cell> [options]
+    python route.py <lib> <cell> --process-lib <LIB> [options]
 
 Example:
-    python route.py test pfd_mini_delay_1 \\
-        --process-lib tsmc18 \\
-        --ignore-net VDD --ignore-net VSS \\
+    python route.py mylib myinv \
+        --process-lib <YOUR_PROCESS> \
+        --ignore-net VDD --ignore-net VSS \
         --ignore-lib basic
 """
 
@@ -29,12 +29,17 @@ from virtuoso_bridge.virtuoso.schematic.reader import read_schematic
 HERE = Path(__file__).parent
 DEFAULT_BINARY = HERE / "autorouter/bin/autorouter"
 
-LAYER_MAP = {
-    "M1":    ("METAL1", "drawing"),
-    "M2":    ("METAL2", "drawing"),
-    "M3":    ("METAL3", "drawing"),
-    "Via12": ("VIA12",  "drawing"),
-    "Via23": ("VIA23",  "drawing"),
+# Map from autorouter internal layer names to PDK physical layer names.
+# Add an entry keyed by the --process-lib name you pass on the command line.
+# Physical layer names are PDK-specific — consult your PDK's layer table.
+_LAYER_MAPS: dict[str, dict[str, tuple[str, str]]] = {
+    # "myprocess": {
+    #     "M1":    ("<M1_layer_name>",    "drawing"),
+    #     "M2":    ("<M2_layer_name>",    "drawing"),
+    #     "M3":    ("<M3_layer_name>",    "drawing"),
+    #     "Via12": ("<Via12_layer_name>", "drawing"),
+    #     "Via23": ("<Via23_layer_name>", "drawing"),
+    # },
 }
 
 
@@ -44,7 +49,6 @@ def nm_to_um(v: int) -> float:
 
 def layout_create_pin(layer: str, name: str, direction: str,
                       llx: float, lly: float, urx: float, ury: float) -> str:
-    """Build SKILL to create a proper Virtuoso layout pin with label."""
     cx = (llx + urx) / 2
     cy = (lly + ury) / 2
     pin_skill = (
@@ -63,42 +67,78 @@ def _skill(client: VirtuosoClient, cmd: str) -> None:
         raise RuntimeError(f"SKILL failed: {result.errors}\n  cmd: {cmd[:120]}")
 
 
+def _skill_read_boundaries(lib: str, cell: str) -> str:
+    return (
+        'let((cv b) '
+        f'cv = dbOpenCellViewByType("{lib}" "{cell}" "layout" "maskLayout" "r") '
+        'unless(cv return("")) '
+        'b = cv~>prBoundary '
+        'unless(b return("")) '
+        'sprintf(nil "shape\\tobjType=%s\\tlayer=prBoundary\\tpurpose=drawing\\tbbox=%L\\n" '
+        'b~>objType b~>bBox))'
+    )
+
+
+def _skill_read_instances(lib: str, cell: str) -> str:
+    return (
+        'prog((cv out) '
+        f'cv = dbOpenCellViewByType("{lib}" "{cell}" "layout" "maskLayout" "r") '
+        'unless(cv return("")) '
+        'out = "" '
+        'foreach(inst cv~>instances '
+        'out = strcat(out sprintf(nil '
+        '"instance\\tname=%s\\tlib=%s\\tcell=%s\\tview=layout\\txy=%L\\torient=%L\\n" '
+        'inst~>name inst~>libName inst~>cellName inst~>xy inst~>orient))) '
+        'return(out))'
+    )
+
+
 def read_layout(client: VirtuosoClient, lib: str, cell: str) -> tuple[list[dict], list[dict]]:
     result = client.execute_skill(layout_read_geometry(lib, cell), timeout=30)
     raw = result.output or ""
     if raw.startswith('"ERROR') or raw.startswith("ERROR"):
         raise RuntimeError(f"layout read failed: {raw}")
     geometry = result.metadata.get("geometry") or parse_layout_geometry_output(raw)
-    shapes, instances = [], []
-    for obj in geometry:
-        if obj.get("kind") == "instance":
-            instances.append({
-                "name":   obj["name"],
-                "lib":    obj["lib"],
-                "cell":   obj["cell"],
-                "xy":     obj["xy"],
-                "orient": obj.get("orient", "R0"),
-            })
-        else:
-            shapes.append({
-                "layer": obj.get("layer"),
-                "bbox":  obj.get("bbox"),
-            })
+    shapes = [
+        {"layer": obj.get("layer"), "bbox": obj.get("bbox")}
+        for obj in geometry
+        if obj.get("kind") != "instance"
+    ]
+
+    bnd_result = client.execute_skill(_skill_read_boundaries(lib, cell), timeout=30)
+    shapes += [
+        {"layer": obj.get("layer"), "bbox": obj.get("bbox")}
+        for obj in parse_layout_geometry_output(bnd_result.output or "")
+    ]
+
+    inst_result = client.execute_skill(_skill_read_instances(lib, cell), timeout=30)
+    instances = [
+        {
+            "name":   obj["name"],
+            "lib":    obj["lib"],
+            "cell":   obj["cell"],
+            "xy":     obj["xy"],
+            "orient": obj.get("orient", "R0"),
+        }
+        for obj in parse_layout_geometry_output(inst_result.output or "")
+        if obj.get("kind") == "instance"
+    ]
     return shapes, instances
 
 
-def draw_routes(client: VirtuosoClient, lib: str, cell: str, routes: list[dict]) -> int:
+def draw_routes(client: VirtuosoClient, lib: str, cell: str,
+                routes: list[dict], layer_map: dict) -> int:
     _skill(client, f'cv = dbOpenCellViewByType("{lib}" "{cell}" "layout" "maskLayout" "a")')
     drawn = 0
     for route in routes:
         if route.get("error"):
             continue
-        for seg in route.get("segments", []):
-            ll, ur = seg["lower_left"], seg["upper_right"]
-            metal_layer, _ = LAYER_MAP[seg["layer"]]
-            if seg.get("purpose") == "pin":
+        for shape in route.get("shapes", []):
+            ll, ur = shape["lower_left"], shape["upper_right"]
+            metal_layer, _ = layer_map[shape["layer"]]
+            if shape.get("purpose") == "pin" and shape.get("name"):
                 _skill(client, layout_create_pin(
-                    metal_layer, seg["name"], "inputOutput",
+                    metal_layer, shape["name"], "inputOutput",
                     nm_to_um(ll["x"]), nm_to_um(ll["y"]),
                     nm_to_um(ur["x"]), nm_to_um(ur["y"]),
                 ))
@@ -113,28 +153,49 @@ def draw_routes(client: VirtuosoClient, lib: str, cell: str, routes: list[dict])
     return drawn
 
 
+def run_calibre(client: VirtuosoClient, lib: str, cell: str, check: str) -> None:
+    _skill(client, f'dbOpenCellViewByType("{lib}" "{cell}" "schematic" "schematic" "r")')
+    skill_cmd = (
+        f'mgc_custom_menus_run_menu_cmd("{check}" '
+        f'"::CalibreInterface::execCalibre {check}" \'nil ?code "")'
+    )
+    print(f"Starting {check} GUI, please wait for the window to pop up...")
+    client.execute_skill(skill_cmd, timeout=30)
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Autoroute a Virtuoso cell and draw results back into the layout."
     )
     p.add_argument("lib",  help="Virtuoso library name")
     p.add_argument("cell", help="Virtuoso cell name")
-    p.add_argument("--m3-track-width", type=int, default=400, metavar="NM",
-                   help="M3 track width in nm (default: 400)")
-    p.add_argument("--m2-width", type=int, default=280, metavar="NM",
-                   help="M2 wire width in nm (default: 280)")
-    p.add_argument("--process-lib", default="", metavar="LIB",
-                   help="Process library for DRC rules, e.g. tsmc18")
+    p.add_argument("--m3-track-width", type=int, required=True, metavar="NM",
+                   help="M3 routing track pitch in nm (PDK-specific)")
+    p.add_argument("--m2-width", type=int, required=True, metavar="NM",
+                   help="M2 wire width in nm (PDK-specific)")
+    p.add_argument("--process-lib", required=True, metavar="LIB",
+                   help="Process library name; must match a key in _LAYER_MAPS")
     p.add_argument("--ignore-net", action="append", default=[], metavar="NET",
-                   help="Net name to skip routing (repeatable)")
-    p.add_argument("--ignore-lib", action="append", default=[], metavar="LIB",
-                   help="Library whose instances are excluded from routing (repeatable)")
+                   help="Net name to skip routing, e.g. power rails (repeatable)")
+    p.add_argument("--power-net", action="append", default=[], metavar="NET",
+                   help="Net name to route with the power router instead of the signal router (repeatable)")
+    p.add_argument("--ignore-lib", action="append", default=["basic"], metavar="LIB",
+                   help="Cadence infrastructure library (e.g. basic, analoglib) whose instances have no "
+                        "layout and must be skipped during routing (repeatable, default: basic)")
+    p.add_argument("--min-overlap-lib", action="append", default=[], metavar="LIB",
+                   help="Library whose pins use minimum M2 overlap during routing (repeatable)")
+    p.add_argument("--widen-narrow-pins", action="store_true",
+                   help="Widen M1 pins narrower than m2-width to m2-width, centered on the pin")
     p.add_argument("--port", type=int, default=65432,
                    help="Virtuoso bridge TCP port (default: 65432)")
     p.add_argument("--binary", type=Path, default=DEFAULT_BINARY,
                    help=f"Path to autorouter binary (default: {DEFAULT_BINARY})")
     p.add_argument("--verbose", action="store_true",
                    help="Print routing progress to stderr")
+    p.add_argument("--drc", action="store_true",
+                   help="Run Calibre DRC after routing")
+    p.add_argument("--lvs", action="store_true",
+                   help="Run Calibre LVS after routing")
     return p.parse_args()
 
 
@@ -146,6 +207,15 @@ def main() -> int:
             f"ERROR: binary not found at {args.binary}\n"
             "Build it first:\n"
             "    cd autorouter && go build -o bin/autorouter ./cmd/autorouter/",
+            file=sys.stderr,
+        )
+        return 1
+
+    layer_map = _LAYER_MAPS.get(args.process_lib)
+    if layer_map is None:
+        print(
+            f"ERROR: unknown --process-lib '{args.process_lib}'.\n"
+            "Add an entry to _LAYER_MAPS in route.py for your PDK.",
             file=sys.stderr,
         )
         return 1
@@ -175,9 +245,12 @@ def main() -> int:
         str(args.binary),
         f"-m3-track-width={args.m3_track_width}",
         f"-m2-width={args.m2_width}",
-        *[f"-ignore-net={n}" for n in args.ignore_net],
-        *[f"-ignore-lib={l}" for l in args.ignore_lib],
         f"-process-lib={args.process_lib}",
+        *[f"-ignore-net={n}" for n in args.ignore_net],
+        *[f"-power-net={n}" for n in args.power_net],
+        *[f"-ignore-lib={l}" for l in args.ignore_lib],
+        *[f"-min-overlap-lib={l}" for l in args.min_overlap_lib],
+        *(["-widen-narrow-pins"] if args.widen_narrow_pins else []),
         *(["-verbose"] if args.verbose else []),
     ]
     proc = subprocess.run(
@@ -198,10 +271,17 @@ def main() -> int:
     err = [r for r in routes if r.get("error")]
     print(f"Routed {len(ok)}/{len(routes)} nets" + (f" ({len(err)} failed)" if err else ""))
     for r in err:
-        print(f"  net {r['net_id']} FAILED: {r['error']}", file=sys.stderr)
+        net_label = r.get("net_name") or r["net_id"]
+        print(f"  net {net_label} FAILED: {r['error']}", file=sys.stderr)
 
-    drawn = draw_routes(client, args.lib, args.cell, routes)
+    drawn = draw_routes(client, args.lib, args.cell, routes, layer_map)
     print(f"Drew {drawn} shapes into {args.lib}/{args.cell}")
+
+    if args.drc:
+        run_calibre(client, args.lib, args.cell, "DRC")
+    if args.lvs:
+        run_calibre(client, args.lib, args.cell, "LVS")
+
     return 0
 
 

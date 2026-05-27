@@ -16,7 +16,7 @@ Virtuoso CIW
      ▼
 Python scripts (place.py / route.py / pnr.py)
      │  JSON over stdin/stdout
-     ├──▶ placer    (Go) — schematic-aware standard-cell placement
+     ├──▶ placer     (Go) — schematic-aware standard-cell placement
      └──▶ autorouter (Go) — two-layer M2/M3 net routing
 ```
 
@@ -74,25 +74,61 @@ cd placer && go build -o bin/placer ./cmd/placer/ && cd ..
 cd autorouter && go build -o bin/autorouter ./cmd/autorouter/ && cd ..
 ```
 
+## PDK configuration
+
+Before running the scripts you need to supply two PDK-specific values:
+
+1. **`--row-height`** — the physical height of one standard-cell row in nm.
+   Matches the height of a single standard cell in your PDK.
+
+2. **Layer map in `route.py`** — add an entry to `_LAYER_MAPS` keyed by the
+   name you will pass as `--process-lib`. Map each autorouter internal layer
+   name (`M1`, `M2`, `M3`, `Via12`, `Via23`) to the corresponding physical
+   layer name in your PDK.
+
 ## Usage
 
 ### Place
 
+Reads schematic instance positions and places them into a layout cellview with
+a prBoundary.
+
 ```bash
-python place.py test pfd_mini_delay_1 --ignore-lib basic --row-height 3920
+python place.py <lib> <cell> \
+    --row-height <ROW_HEIGHT_NM> \
+    --ignore-lib basic
 ```
 
-Key options: `--row-height` (nm, default 3920), `--pr-margin` (nm, default 10000),
-`--target-width` (nm, splits and repacks rows to fit; 0 disables).
+Key options:
+- `--row-height` (required) — standard cell height in nm
+- `--target-width` — maximum row width in nm; splits rows to fit; 0 disables (default: 0)
+- `--pr-margin` — prBoundary margin in nm (default: 10000 = 10 um)
+- `--ignore-lib` — Cadence infrastructure library with no layout to skip (repeatable, default: basic)
 
 ### Route
 
+Reads the placed layout and schematic connectivity, runs the Go autorouter,
+and draws the result back into the layout.
+
 ```bash
-python route.py test pfd_mini_delay_1 \
-    --process-lib tsmc18 \
+python route.py <lib> <cell> \
+    --process-lib <YOUR_PROCESS> \
+    --m3-track-width <NM> \
+    --m2-width <NM> \
     --ignore-net VDD --ignore-net VSS \
     --ignore-lib basic
 ```
+
+Key options:
+- `--process-lib` (required) — must match a key in `_LAYER_MAPS` in `route.py`
+- `--m3-track-width` (required) — M3 routing track pitch in nm
+- `--m2-width` (required) — M2 wire width in nm
+- `--ignore-net` — net to skip routing, e.g. power rails (repeatable)
+- `--power-net` — net to route with the power router (repeatable)
+- `--ignore-lib` — Cadence infrastructure library with no layout to skip (repeatable, default: basic)
+- `--min-overlap-lib` — library whose pins use minimum M2 overlap (repeatable)
+- `--widen-narrow-pins` — widen M1 pins narrower than m2-width to m2-width
+- `--drc` / `--lvs` — launch Calibre DRC/LVS after routing
 
 See [`autorouter/README.md`](autorouter/README.md) for DRC configuration
 (`drcs.toml`, `pins.toml`) and the full JSON API.
@@ -100,20 +136,34 @@ See [`autorouter/README.md`](autorouter/README.md) for DRC configuration
 ### Place and Route in one step
 
 ```bash
-python pnr.py test pfd_mini_delay_1 \
-    --process-lib tsmc18 \
+python pnr.py <lib> <cell> \
+    --row-height <ROW_HEIGHT_NM> \
+    --process-lib <YOUR_PROCESS> \
+    --m3-track-width <NM> \
+    --m2-width <NM> \
+    --ignore-net VDD --ignore-net VSS
+```
+
+To also extend power rails after routing, pass the PDK layer names and rail geometry:
+
+```bash
+python pnr.py <lib> <cell> \
+    --row-height <ROW_HEIGHT_NM> \
+    --process-lib <YOUR_PROCESS> \
+    --m3-track-width <NM> \
+    --m2-width <NM> \
     --ignore-net VDD --ignore-net VSS \
-    --ignore-lib basic \
-    --row-height 3920
+    --m1-layer <M1_LAYER> --m2-layer <M2_LAYER> --via12-layer <VIA12_LAYER> \
+    --rail-half <NM> --via-cut <UM> --via-spacing-x <UM> --via-spacing-y <UM>
 ```
 
 With Calibre DRC/LVS:
 
 ```bash
-python pnr.py test pfd_mini_delay_1 \
-    --process-lib tsmc18 \
-    --ignore-net VDD --ignore-net VSS \
-    --ignore-lib basic \
-    --row-height 3920 \
+python pnr.py <lib> <cell> \
+    --row-height <ROW_HEIGHT_NM> \
+    --process-lib <YOUR_PROCESS> \
+    --m3-track-width <NM> \
+    --m2-width <NM> \
     --drc --lvs
 ```
