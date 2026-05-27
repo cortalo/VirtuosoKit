@@ -79,9 +79,21 @@ func (r NetResult) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Session) Route() []NetResult {
-	results := make([]NetResult, len(s.netlist.Nets))
+	nets := make([]*Net, 0, len(s.netlist.Nets))
+	for _, net := range s.netlist.Nets {
+		if s.powerNets[net.Name] {
+			nets = append(nets, net)
+		}
+	}
+	for _, net := range s.netlist.Nets {
+		if !s.powerNets[net.Name] {
+			nets = append(nets, net)
+		}
+	}
 
-	for i, net := range s.netlist.Nets {
+	results := make([]NetResult, len(nets))
+
+	for i, net := range nets {
 		r := s.router
 		if s.powerNets[net.Name] {
 			if s.powerRouter == nil {
