@@ -102,10 +102,19 @@ func (s *Session) Route() []NetResult {
 		N := len(shapes)
 
 		for j, pin := range net.Pins {
+			if shapes[j].NoVia {
+				continue
+			}
 			shapes = s.appendViaCuts(shapes, shapes[j], pinBBox(pin))
 		}
 		for ii := range N {
+			if shapes[ii].NoVia {
+				continue
+			}
 			for jj := ii + 1; jj < N; jj++ {
+				if shapes[jj].NoVia {
+					continue
+				}
 				shapes = s.appendViaCuts(shapes, shapes[ii], shapes[jj])
 			}
 		}

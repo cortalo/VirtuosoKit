@@ -154,6 +154,7 @@ type Shape struct {
 	Layer      Layer   `json:"layer"`
 	Purpose    Purpose `json:"purpose"`
 	Name       string  `json:"name,omitempty"`
+	NoVia      bool    `json:"-"`
 }
 
 type Segment struct {
@@ -163,6 +164,7 @@ type Segment struct {
 	Layer        Layer     `json:"layer"`
 	CanvasOrigin Point     `json:"-"`
 	Dir          Direction `json:"-"`
+	NoVia        bool      `json:"-"`
 }
 
 func (seg Segment) ToShape() Shape {
@@ -172,6 +174,7 @@ func (seg Segment) ToShape() Shape {
 		NetID:      seg.NetID,
 		Layer:      seg.Layer,
 		Purpose:    Drawing,
+		NoVia:      seg.NoVia,
 	}
 }
 
