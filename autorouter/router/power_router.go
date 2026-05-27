@@ -44,7 +44,8 @@ func (r *PowerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
 			if err != nil {
 				return nil, err
 			}
-			m1Seg.NoVia = true
+			m1Seg.NoViaUp = true
+			m1Seg.NoViaDown = true
 			widenedM1s = append(widenedM1s, m1Seg)
 		}
 	}

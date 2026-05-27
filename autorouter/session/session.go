@@ -114,19 +114,13 @@ func (s *Session) Route() []NetResult {
 		N := len(shapes)
 
 		for j, pin := range net.Pins {
-			if shapes[j].NoVia {
+			if shapes[j].NoViaDown {
 				continue
 			}
 			shapes = s.appendViaCuts(shapes, shapes[j], pinBBox(pin))
 		}
 		for ii := range N {
-			if shapes[ii].NoVia {
-				continue
-			}
 			for jj := ii + 1; jj < N; jj++ {
-				if shapes[jj].NoVia {
-					continue
-				}
 				shapes = s.appendViaCuts(shapes, shapes[ii], shapes[jj])
 			}
 		}
@@ -153,13 +147,28 @@ func (s *Session) Route() []NetResult {
 }
 
 // appendViaCuts detects the via type from a.Layer/b.Layer and places via cuts
-// in the overlap region. Unrecognised layer combinations are a no-op.
+// in the overlap region. NoViaUp on the lower shape or NoViaDown on the upper
+// shape suppresses the via. Unrecognised layer combinations are a no-op.
 func (s *Session) appendViaCuts(shapes []Shape, a, b Shape) []Shape {
 	la, lb := a.Layer, b.Layer
 	switch {
 	case (la == common.M1 && lb == common.M2) || (la == common.M2 && lb == common.M1):
+		m1, m2 := a, b
+		if la == common.M2 {
+			m1, m2 = b, a
+		}
+		if m1.NoViaUp || m2.NoViaDown {
+			return shapes
+		}
 		return common.PlaceViaCuts(shapes, a, b, s.via12, common.Via12, s.m2DRC.ViaEnclosure())
 	case (la == common.M2 && lb == common.M3) || (la == common.M3 && lb == common.M2):
+		m2, m3 := a, b
+		if la == common.M3 {
+			m2, m3 = b, a
+		}
+		if m2.NoViaUp || m3.NoViaDown {
+			return shapes
+		}
 		return common.PlaceViaCuts(shapes, a, b, s.via23, common.Via23, max(s.m2DRC.ViaEnclosure(), s.m3DRC.ViaEnclosure()))
 	default:
 		return shapes
