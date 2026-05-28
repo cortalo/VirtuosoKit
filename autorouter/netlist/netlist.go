@@ -256,6 +256,29 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 		schemLib[inst.Name] = inst.Lib
 	}
 
+	// filteredNetsMap removes instance pins that are excluded by ignoredLibs or
+	// ignoredLibNetSet, so both the net routing loop and the layout pins loop see
+	// only connections that are actually routable.
+	filteredNetsMap := make(map[string][]string, len(expandedNetsMap))
+	for netName, instPins := range expandedNetsMap {
+		for _, ip := range instPins {
+			parts := strings.SplitN(ip, ".", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			lib := schemLib[parts[0]]
+			if _, skip := ignoredLibs[lib]; skip {
+				continue
+			}
+			if libNets, ok := ignoredLibNetSet[lib]; ok {
+				if _, skip := libNets[netName]; skip {
+					continue
+				}
+			}
+			filteredNetsMap[netName] = append(filteredNetsMap[netName], ip)
+		}
+	}
+
 	instByName := make(map[string]LayoutInstance, len(layout.Instances))
 	for _, inst := range layout.Instances {
 		instByName[inst.Name] = inst
@@ -371,7 +394,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			if _, skip := ignoredNets[name]; skip {
 				continue
 			}
-			instPinList, ok := expandedNetsMap[name]
+			instPinList, ok := filteredNetsMap[name]
 			if !ok || len(instPinList) == 0 {
 				continue
 			}
