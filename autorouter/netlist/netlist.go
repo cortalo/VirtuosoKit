@@ -208,7 +208,10 @@ func transformPin(xLow, xHigh, yLow, yHigh int, orient string) (int, int, int, i
 // the same net ID. Nets in ignoreNets and pins whose instance belongs to a lib in
 // ignoreLibs are skipped; a net with fewer than 2 remaining pins is dropped.
 // Pins whose instance lib is in minOverlapLibs have RoutingPin.MinOverlap set to true.
-func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
+// ignoreLibNets entries have the form "lib:net": pins of that net are skipped only
+// when the pin's instance lib matches; the net itself is kept if other libs still
+// contribute enough pins.
+func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
 	lowerLeft, upperRight, err = prBoundary(layout.Shapes)
 	if err != nil {
 		return
@@ -225,6 +228,20 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 	minOverlapLibSet := make(map[string]struct{}, len(minOverlapLibs))
 	for _, l := range minOverlapLibs {
 		minOverlapLibSet[l] = struct{}{}
+	}
+	// ignoredLibNetSet: lib → set of net names whose pins from that lib are dropped.
+	ignoredLibNetSet := make(map[string]map[string]struct{}, len(ignoreLibNets))
+	for _, entry := range ignoreLibNets {
+		idx := strings.IndexByte(entry, ':')
+		if idx < 0 {
+			err = fmt.Errorf("netlist: --ignore-lib-net %q: expected format lib:net", entry)
+			return
+		}
+		lib, net := entry[:idx], entry[idx+1:]
+		if ignoredLibNetSet[lib] == nil {
+			ignoredLibNetSet[lib] = make(map[string]struct{})
+		}
+		ignoredLibNetSet[lib][net] = struct{}{}
 	}
 
 	expandedInsts := expandSchematicInstances(schematic.Instances)
@@ -268,6 +285,11 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 				if _, skip := ignoredLibs[lib]; skip {
 					continue
 				}
+				if nets, ok := ignoredLibNetSet[lib]; ok {
+					if _, skip := nets[name]; skip {
+						continue
+					}
+				}
 			}
 			inst, ok := instByName[parts[0]]
 			if !ok {
@@ -276,6 +298,11 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 			}
 			if _, skip := ignoredLibs[inst.Lib]; skip {
 				continue
+			}
+			if nets, ok := ignoredLibNetSet[inst.Lib]; ok {
+				if _, skip := nets[name]; skip {
+					continue
+				}
 			}
 			isEscape, ierr := db.IsEscapeCell(inst.Lib, inst.Cell)
 			if ierr != nil {
@@ -408,7 +435,7 @@ func BuildNetsFromData(layout Layout, schematic Schematic, db PinDB, ignoreNets,
 }
 
 // BuildNets loads layout and schematic from JSON files and calls BuildNetsFromData.
-func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
+func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string) (lowerLeft, upperRight common.Point, nl *common.Netlist, err error) {
 	var layout Layout
 	if err = parseJSON(layoutPath, &layout); err != nil {
 		return
@@ -417,7 +444,7 @@ func BuildNets(layoutPath, schematicPath string, db PinDB, ignoreNets, ignoreLib
 	if err = parseJSON(schematicPath, &schematic); err != nil {
 		return
 	}
-	return BuildNetsFromData(layout, schematic, db, ignoreNets, ignoreLibs, minOverlapLibs)
+	return BuildNetsFromData(layout, schematic, db, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets)
 }
 
 func parseJSON(path string, v any) error {

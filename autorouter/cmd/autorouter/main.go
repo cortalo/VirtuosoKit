@@ -148,6 +148,8 @@ func main() {
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	var ignoreLibs ignoreNetFlag
 	flag.Var(&ignoreLibs, "ignore-lib", "lib name whose instances are excluded from routing (repeatable, e.g. -ignore-lib analogLib)")
+	var ignoreLibNets ignoreNetFlag
+	flag.Var(&ignoreLibNets, "ignore-lib-net", "lib:net pair to skip pins of that net only for instances in that lib (repeatable, e.g. -ignore-lib-net analogLib:VDD)")
 	var minOverlapLibs ignoreNetFlag
 	flag.Var(&minOverlapLibs, "min-overlap-lib", "lib name whose pins use minimum M2 overlap (repeatable, e.g. -min-overlap-lib stdcellLib)")
 	var powerNets ignoreNetFlag
@@ -185,7 +187,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs, minOverlapLibs)
+	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

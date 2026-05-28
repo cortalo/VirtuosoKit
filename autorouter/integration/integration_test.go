@@ -39,7 +39,7 @@ func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
 		"testdata/inv2_layout.json",
 		"testdata/inv2_schematic.json",
 		db,
-		nil, nil, nil,
+		nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1, "only net2 has 2+ pins")
@@ -136,7 +136,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 		"testdata/inv_layout.json",
 		"testdata/inv_schematic.json",
 		db,
-		nil, nil, nil,
+		nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
