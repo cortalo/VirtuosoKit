@@ -185,7 +185,7 @@ func (r *TwoLayerRouter) postProcessStubs(segs []Segment, nPins, netID int) ([]S
 	for _, g := range groups {
 		g.markNoViaUp()
 		if g.needsFiller() {
-			f, err := g.filler(r.canvas, m3.LowerLeft.Y, m3.UpperRight.Y, netID)
+			f, err := g.filler(r.canvas, r.m2DRC, m3.LowerLeft.Y, m3.UpperRight.Y, netID)
 			if err != nil {
 				return nil, err
 			}
@@ -226,8 +226,9 @@ func (g m2Group) markNoViaUp() {
 // filler creates an M2 bar spanning the group's X range at the M3 track Y level,
 // to be used as the single via contact point to M3. NoViaDown is set so the filler
 // does not attempt a via back down to M1.
-func (g m2Group) filler(c Canvas, m3YLo, m3YHi, netID int) (Segment, error) {
+func (g m2Group) filler(c Canvas, m2DRC DRCSpec, m3YLo, m3YHi, netID int) (Segment, error) {
 	xLo, xHi := g.xSpan()
+	m3YLo, m3YHi = m2DRC.ApplyEndExtension(m3YLo, m3YHi)
 	seg, err := c.NewSeg(common.M2, Point{X: xLo, Y: m3YLo}, Point{X: xHi, Y: m3YHi}, netID)
 	if err != nil {
 		return Segment{}, err
