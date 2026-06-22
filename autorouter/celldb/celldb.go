@@ -2,16 +2,15 @@ package celldb
 
 import (
 	"autorouter/common"
-	"errors"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
 )
 
 var (
-	ErrLibNotFound  = errors.New("lib not found")
-	ErrCellNotFound = errors.New("cell not found")
-	ErrPinNotFound  = errors.New("pin not found")
+	ErrLibNotFound  = fmt.Errorf("lib not found: %w", common.ErrPinNotFound)
+	ErrCellNotFound = fmt.Errorf("cell not found: %w", common.ErrPinNotFound)
+	ErrPinNotFound  = fmt.Errorf("pin not found: %w", common.ErrPinNotFound)
 )
 
 type Pin struct {

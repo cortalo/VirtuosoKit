@@ -3,6 +3,7 @@ package netlist
 import (
 	"autorouter/common"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -15,7 +16,6 @@ type StringSet = map[string]struct{}
 
 type PinDB interface {
 	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error)
-	IsEscapeCell(lib, cell string) (bool, error)
 }
 
 func toSet(ss []string) StringSet {
@@ -47,13 +47,10 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 			if !ok {
 				return nil, fmt.Errorf("netlist: instance %q not found in layout", parts[0])
 			}
-			isEscape, ierr := db.IsEscapeCell(inst.Lib, inst.Cell)
-			if ierr != nil {
-				return nil, fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, ierr)
-			}
+			_, isMinOverlap := minOverlapSet[inst.Lib]
 			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
-				if !isEscape {
+				if !errors.Is(qerr, common.ErrPinNotFound) {
 					return nil, fmt.Errorf("netlist: net %q pin %q: %w", name, instPin, qerr)
 				}
 				term, hasTerm := inst.Terminals[parts[1]]
@@ -64,8 +61,8 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 				if lerr != nil {
 					return nil, fmt.Errorf("netlist: net %q pin %q: terminal layer %q: %w", name, instPin, term.Layer, lerr)
 				}
-				_, isMinOverlap := minOverlapSet[inst.Lib]
 				pins = append(pins, common.RoutingPin{
+					Name:       instPin,
 					Layer:      termLayer,
 					XLow:       int(math.Round(term.Bbox[0][0] * 1000)),
 					YLow:       int(math.Round(term.Bbox[0][1] * 1000)),
@@ -78,8 +75,8 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 			instX := int(math.Round(inst.XY[0] * 1000))
 			instY := int(math.Round(inst.XY[1] * 1000))
 			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
-			_, isMinOverlap := minOverlapSet[inst.Lib]
 			pins = append(pins, common.RoutingPin{
+				Name:       instPin,
 				Layer:      pinLayer,
 				XLow:       instX + txLow,
 				XHigh:      instX + txHigh,
@@ -92,12 +89,40 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 			continue
 		}
 		nets = append(nets, &common.Net{
-			ID:   netID + 1,
-			Name: name,
-			Pins: pins,
+			ID:     netID + 1,
+			Name:   name,
+			Pins:   pins,
+			Driver: findDriver(name, instPins, schematic),
 		})
 	}
 	return nets, nil
+}
+
+func findDriver(netName string, instPins []string, schematic Schematic) string {
+	var driver string
+	var count int
+	for _, instPin := range instPins {
+		parts := strings.SplitN(instPin, ".", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		inst, ok := schematic.Instances[parts[0]]
+		if !ok {
+			continue
+		}
+		if inst.Pins[parts[1]] == PinDirOutput {
+			count++
+			if driver == "" {
+				driver = instPin
+			}
+		}
+	}
+	if count == 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has no output driver\n", netName)
+	} else if count > 1 {
+		_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has %d output drivers, using %q\n", netName, count, driver)
+	}
+	return driver
 }
 
 func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string) ([]*common.RoutingPin, error) {
@@ -120,13 +145,9 @@ func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string
 			if !ok {
 				return nil, fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
 			}
-			isEscape, ierr := db.IsEscapeCell(inst.Lib, inst.Cell)
-			if ierr != nil {
-				return nil, fmt.Errorf("netlist: pin %q: %w", name, ierr)
-			}
 			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
 			if qerr != nil {
-				if !isEscape {
+				if !errors.Is(qerr, common.ErrPinNotFound) {
 					return nil, fmt.Errorf("netlist: pin %q: %w", name, qerr)
 				}
 				term, hasTerm := inst.Terminals[parts[1]]

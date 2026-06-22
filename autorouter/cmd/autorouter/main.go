@@ -156,7 +156,25 @@ func main() {
 	flag.Var(&powerNets, "power-net", "net name to route with PowerRouter (repeatable, e.g. -power-net VDD -power-net VSS)")
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	widenNarrowPins := flag.Bool("widen-narrow-pins", false, "widen M1 pins narrower than m2-width to m2-width, centered on the pin (classic mode)")
+	innovus := flag.Bool("innovus", false, "write Verilog for Innovus instead of routing")
+	moduleName := flag.String("module-name", "", "Verilog module name (required with -innovus)")
+	outputPath := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
 	flag.Parse()
+
+	if *innovus {
+		if *moduleName == "" {
+			fmt.Fprintf(os.Stderr, "error: -module-name is required with -innovus\n")
+			os.Exit(1)
+		}
+		if *outputPath == "" {
+			fmt.Fprintf(os.Stderr, "error: -output is required with -innovus\n")
+			os.Exit(1)
+		}
+		if !filepath.IsAbs(*outputPath) {
+			fmt.Fprintf(os.Stderr, "error: -output must be an absolute path, got %q\n", *outputPath)
+			os.Exit(1)
+		}
+	}
 
 	drcsP, err := drcsPath()
 	if err != nil {
@@ -187,11 +205,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, err := netlist.PRBoundary(req.Layout)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: pr boundary: %v\n", err)
-		os.Exit(1)
-	}
 	nl, err := netlist.BuildNetsFromData(req.Layout, req.RawSchematic, db,
 		[]string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets))
 	if err != nil {
@@ -199,12 +212,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *innovus {
+		verilog := writeVerilog(*moduleName, nl)
+		if err := os.WriteFile(*outputPath, []byte(verilog), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "error: write verilog: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	ll, ur, err := netlist.PRBoundary(req.Layout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: pr boundary: %v\n", err)
+		os.Exit(1)
+	}
+
 	m2DRC := loadDRCSpec(drcDB, *processLib, "M2")
 	m3DRC := loadDRCSpec(drcDB, *processLib, "M3")
 	via12 := loadViaConfig(drcDB, *processLib, "Via12")
 	via23 := loadViaConfig(drcDB, *processLib, "Via23")
-	contactVC := loadViaConfig(drcDB, *processLib, "Contact")
-
 	var c session.Canvas
 	var r session.Router
 	var rc router.Canvas
@@ -266,15 +292,6 @@ func main() {
 		}
 	}
 	routes := s.Route()
-
-	escapeShapes, err := netlist.BuildEscapeShapes(req.Layout, db, contactVC)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: build escape shapes: %v\n", err)
-		os.Exit(1)
-	}
-	if len(escapeShapes) > 0 {
-		routes = append(routes, session.NetResult{Shapes: escapeShapes})
-	}
 
 	if *verbose {
 		ok := 0

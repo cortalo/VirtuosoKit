@@ -1,7 +1,8 @@
 package netlist
 
 import (
-	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"autorouter/common"
@@ -12,9 +13,7 @@ import (
 
 // stubDB implements PinDB for testing.
 type stubDB struct {
-	pins      map[string]stubPinData // key: "lib/cell/pin"
-	escape    map[string]bool        // key: "lib/cell"
-	escapeErr error                  // returned by IsEscapeCell when non-nil
+	pins map[string]stubPinData // key: "lib/cell/pin"
 }
 
 type stubPinData struct {
@@ -26,14 +25,7 @@ func (db *stubDB) Query(lib, cell, pin string) (int, int, int, int, common.Layer
 	if p, ok := db.pins[lib+"/"+cell+"/"+pin]; ok {
 		return p.xLow, p.xHigh, p.yLow, p.yHigh, p.layer, nil
 	}
-	return 0, 0, 0, 0, 0, errors.New("stub: pin not found")
-}
-
-func (db *stubDB) IsEscapeCell(lib, cell string) (bool, error) {
-	if db.escapeErr != nil {
-		return false, db.escapeErr
-	}
-	return db.escape[lib+"/"+cell], nil
+	return 0, 0, 0, 0, 0, fmt.Errorf("stub: %w: %s/%s/%s", common.ErrPinNotFound, lib, cell, pin)
 }
 
 func TestExpandBusName_Scalar(t *testing.T) {
@@ -144,12 +136,11 @@ func twoInstSchem(lib string, pinName string) RawSchematic {
 	}
 }
 
-// TestBuildNets_NormalPin_TransformAndOffsetApplied: non-escape cell, pin found in db;
+// TestBuildNets_NormalPin_TransformAndOffsetApplied: pin found in db;
 // instance XY offset is added to the transformed cell-relative bbox.
 func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	db := &stubDB{
-		pins:   map[string]stubPinData{"mylib/mycell/A": {10, 20, 30, 40, common.M1}},
-		escape: map[string]bool{},
+		pins: map[string]stubPinData{"mylib/mycell/A": {10, 20, 30, 40, common.M1}},
 	}
 	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 2.0}, [2]float64{3.0, 4.0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
@@ -171,75 +162,9 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	assert.Equal(t, 4030, pins[1].YLow)
 }
 
-// TestBuildNets_EscapeCell_PinInDB_UsesTransformAndOffset: escape=true but pin IS in db;
-// should still use transform+offset, not the terminal coords.
-func TestBuildNets_EscapeCell_PinInDB_UsesTransformAndOffset(t *testing.T) {
-	db := &stubDB{
-		pins:   map[string]stubPinData{"mylib/mycell/A": {10, 20, 30, 40, common.M1}},
-		escape: map[string]bool{"mylib/mycell": true},
-	}
-	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 0.0}, [2]float64{2.0, 0.0}, nil, nil)
-	schem := twoInstSchem("mylib", "A")
-
-	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
-
-	require.NoError(t, err)
-	require.Len(t, nl.Nets, 1)
-	pins := nl.Nets[0].Pins
-	require.Len(t, pins, 2)
-	assert.Equal(t, 1010, pins[0].XLow) // 1000+10, not terminal
-	assert.Equal(t, 2010, pins[1].XLow) // 2000+10
-}
-
-// TestBuildNets_EscapeCell_PinFromTerminal: escape=true, pin absent from db;
-// absolute bbox from terminal used directly (no XY offset, no transform).
-func TestBuildNets_EscapeCell_PinFromTerminal(t *testing.T) {
-	db := &stubDB{
-		pins:   map[string]stubPinData{},
-		escape: map[string]bool{"mylib/mycell": true},
-	}
-	i0terms := map[string]TerminalInfo{"G": {Layer: "M1", Bbox: [2][2]float64{{0.1, 0.2}, {0.3, 0.4}}}}
-	i1terms := map[string]TerminalInfo{"G": {Layer: "M1", Bbox: [2][2]float64{{0.5, 0.6}, {0.7, 0.8}}}}
-	layout := twoInstLayout("mylib", "mycell", [2]float64{99.0, 99.0}, [2]float64{99.0, 99.0}, i0terms, i1terms)
-	schem := twoInstSchem("mylib", "G")
-
-	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
-
-	require.NoError(t, err)
-	require.Len(t, nl.Nets, 1)
-	pins := nl.Nets[0].Pins
-	require.Len(t, pins, 2)
-	// Absolute coords from terminal — XY offset (99000, 99000) must NOT be added.
-	assert.Equal(t, 100, pins[0].XLow)
-	assert.Equal(t, 300, pins[0].XHigh)
-	assert.Equal(t, 200, pins[0].YLow)
-	assert.Equal(t, 400, pins[0].YHigh)
-	assert.Equal(t, common.M1, pins[0].Layer)
-	assert.Equal(t, 500, pins[1].XLow)
-	assert.Equal(t, 600, pins[1].YLow)
-}
-
-// TestBuildNets_EscapeCell_MissingTerminal_ReturnsError: escape=true, pin absent from both
-// db and terminals map → error.
-func TestBuildNets_EscapeCell_MissingTerminal_ReturnsError(t *testing.T) {
-	db := &stubDB{
-		pins:   map[string]stubPinData{},
-		escape: map[string]bool{"mylib/mycell": true},
-	}
-	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
-	schem := twoInstSchem("mylib", "G")
-
-	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
-
-	assert.Error(t, err)
-}
-
-// TestBuildNets_NonEscapeCell_PinNotFound_ReturnsError: non-escape cell, pin absent → error.
-func TestBuildNets_NonEscapeCell_PinNotFound_ReturnsError(t *testing.T) {
-	db := &stubDB{
-		pins:   map[string]stubPinData{},
-		escape: map[string]bool{},
-	}
+// TestBuildNets_PinNotFound_ReturnsError: pin absent from db → error.
+func TestBuildNets_PinNotFound_ReturnsError(t *testing.T) {
+	db := &stubDB{pins: map[string]stubPinData{}}
 	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
@@ -286,4 +211,79 @@ func TestTransformPin(t *testing.T) {
 		assert.Equal(t, yL, yl)
 		assert.Equal(t, yH, yh)
 	})
+}
+
+// TestBuildNetsFromData_TerminalFallback exercises the terminal-fallback path
+// (empty celldb → all pin positions come from inst.Terminals).
+//
+// Layout has two inv instances; schematic has:
+//   - net1: I1.VOUT → I0.VIN  (2 pins → routed)
+//   - VDD, VSS: 2 pins each   (routed)
+//   - VOUT, VIN: 1 pin each   (dropped — below 2-pin threshold, but appear as layout pins)
+//
+// Top-level ports: VIN, VOUT, VDD, VSS.
+func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
+	layout, schem, err := LoadFiles(
+		"testdata/inv2_terminal_layout.json",
+		"testdata/inv2_terminal_schematic.json",
+	)
+	require.NoError(t, err)
+
+	db := &stubDB{pins: map[string]stubPinData{}} // empty → terminal fallback for all
+
+	nl, err := BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil)
+	require.NoError(t, err)
+
+	// ── layout pins (top-level ports) ────────────────────────────────────────
+	wantPorts := map[string]bool{"VIN": false, "VOUT": false}
+	assert.Len(t, nl.Pins, len(wantPorts), "unexpected number of layout pins")
+	for _, p := range nl.Pins {
+		assert.NotEmpty(t, p.Name, "layout pin missing Name")
+		assert.True(t, p.XLow < p.XHigh, "layout pin %q: XLow >= XHigh", p.Name)
+		assert.True(t, p.YLow < p.YHigh, "layout pin %q: YLow >= YHigh", p.Name)
+		assert.NotZero(t, p.Layer, "layout pin %q: zero Layer", p.Name)
+		wantPorts[p.Name] = true
+	}
+	for name, seen := range wantPorts {
+		assert.True(t, seen, "expected layout pin %q not found", name)
+	}
+
+	// Expand schematic once so we can look up pin directions for Driver checks.
+	expanded, err := schem.Expand()
+	require.NoError(t, err)
+
+	// ── routing nets ─────────────────────────────────────────────────────────
+	wantNets := map[string]bool{"net1": false}
+	assert.Len(t, nl.Nets, len(wantNets), "unexpected number of nets")
+	for _, net := range nl.Nets {
+		wantNets[net.Name] = true
+		assert.GreaterOrEqual(t, len(net.Pins), 2, "net %q has fewer than 2 pins", net.Name)
+		for i, p := range net.Pins {
+			// Name must be "InstName.PinName" — exactly one dot.
+			assert.Equal(t, 1, strings.Count(p.Name, "."),
+				"net %q pin[%d] Name %q: expected exactly one dot", net.Name, i, p.Name)
+			assert.True(t, p.XLow < p.XHigh,
+				"net %q pin[%d] %q: XLow >= XHigh", net.Name, i, p.Name)
+			assert.True(t, p.YLow < p.YHigh,
+				"net %q pin[%d] %q: YLow >= YHigh", net.Name, i, p.Name)
+			assert.NotZero(t, p.Layer,
+				"net %q pin[%d] %q: zero Layer", net.Name, i, p.Name)
+		}
+
+		// Driver must be non-empty and must resolve to an output pin in the schematic.
+		assert.NotEmpty(t, net.Driver, "net %q: Driver is empty", net.Name)
+		if net.Driver != "" {
+			parts := strings.SplitN(net.Driver, ".", 2)
+			require.Lenf(t, parts, 2, "net %q Driver %q: expected inst.pin format", net.Name, net.Driver)
+			inst, ok := expanded.Instances[parts[0]]
+			require.Truef(t, ok, "net %q Driver %q: instance not found in schematic", net.Name, net.Driver)
+			dir, ok := inst.Pins[parts[1]]
+			require.Truef(t, ok, "net %q Driver %q: pin not found in schematic instance", net.Name, net.Driver)
+			assert.Equal(t, PinDirOutput, dir,
+				"net %q Driver %q: expected output direction", net.Name, net.Driver)
+		}
+	}
+	for name, seen := range wantNets {
+		assert.True(t, seen, "expected net %q not found", name)
+	}
 }

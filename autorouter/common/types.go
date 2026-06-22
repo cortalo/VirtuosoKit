@@ -10,6 +10,7 @@ var (
 	ErrTrackMisaligned    = errors.New("segment is not aligned to track grid")
 	ErrTrackWidthMismatch = errors.New("segment width does not match track width")
 	ErrUnknownDirection   = errors.New("segment direction not set")
+	ErrPinNotFound        = errors.New("pin not found")
 )
 
 type Point struct {
@@ -249,9 +250,10 @@ type RoutingPin struct {
 }
 
 type Net struct {
-	ID   int
-	Name string
-	Pins []RoutingPin
+	ID     int
+	Name   string
+	Pins   []RoutingPin
+	Driver string
 }
 
 // Netlist holds everything the router needs: the internal nets to route and

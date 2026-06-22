@@ -1,0 +1,27 @@
+{
+  "instances": [
+    {
+      "name": "I0",
+      "lib": "test",
+      "pins": {"VDD": "inputOutput", "VSS": "inputOutput", "VOUT": "output", "VIN": "input"}
+    },
+    {
+      "name": "I1",
+      "lib": "test",
+      "pins": {"VDD": "inputOutput", "VSS": "inputOutput", "VOUT": "output", "VIN": "input"}
+    }
+  ],
+  "nets": {
+    "VOUT": ["I0.VOUT"],
+    "net1": ["I1.VOUT", "I0.VIN"],
+    "VIN":  ["I1.VIN"],
+    "VSS":  ["I0.VSS", "I1.VSS"],
+    "VDD":  ["I0.VDD", "I1.VDD"]
+  },
+  "pins": {
+    "VIN":  {"direction": "input",       "numBits": 1},
+    "VOUT": {"direction": "output",      "numBits": 1},
+    "VDD":  {"direction": "inputOutput", "numBits": 1},
+    "VSS":  {"direction": "inputOutput", "numBits": 1}
+  }
+}

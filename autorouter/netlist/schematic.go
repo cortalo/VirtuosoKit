@@ -19,10 +19,51 @@ type RawSchematic struct {
 	Pins      map[string]json.RawMessage `json:"pins"` // port names (values ignored)
 }
 
+type PinDir int
+
+const (
+	PinDirInput PinDir = iota
+	PinDirOutput
+	PinDirInputOutput
+)
+
+var pinDirName = map[PinDir]string{
+	PinDirInput:       "input",
+	PinDirOutput:      "output",
+	PinDirInputOutput: "inputOutput",
+}
+
+var pinDirValue = map[string]PinDir{
+	"input":       PinDirInput,
+	"output":      PinDirOutput,
+	"inputOutput": PinDirInputOutput,
+}
+
+func (d PinDir) MarshalJSON() ([]byte, error) {
+	s, ok := pinDirName[d]
+	if !ok {
+		return nil, fmt.Errorf("unknown PinDir %d", d)
+	}
+	return json.Marshal(s)
+}
+
+func (d *PinDir) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	v, ok := pinDirValue[s]
+	if !ok {
+		return fmt.Errorf("unknown PinDir %q", s)
+	}
+	*d = v
+	return nil
+}
+
 type SchematicInstance struct {
-	Name     string `json:"name"`
-	CellName string `json:"cell"`
-	Lib      string `json:"lib"`
+	Name string            `json:"name"`
+	Lib  string            `json:"lib"`
+	Pins map[string]PinDir `json:"pins,omitempty"`
 }
 
 // Schematic is the expanded form of RawSchematic: bus notation resolved,
@@ -196,7 +237,7 @@ func expandSchematicInstances(instances []SchematicInstance) map[string]Schemati
 	result := make(map[string]SchematicInstance)
 	for _, inst := range instances {
 		for _, name := range expandBusName(inst.Name) {
-			result[name] = SchematicInstance{Name: name, CellName: inst.CellName, Lib: inst.Lib}
+			result[name] = SchematicInstance{Name: name, Lib: inst.Lib, Pins: inst.Pins}
 		}
 	}
 	return result
