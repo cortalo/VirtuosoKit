@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestIntegration_Inv2Layout_Orientation verifies that orientation-transformed pins
+// TestIntegration_Inv2RawLayout_Orientation verifies that orientation-transformed pins
 // (I0 with MX, I1 with MY) are correctly placed so that net2 (I0.ZN → I1.I) routes
 // and that the output segments reflect the mirrored pin coordinates.
 //
@@ -29,18 +29,17 @@ import (
 //
 // Router selects track 99 (trackY=-100..0) — midY=(-300+100)/2=-100.
 // Session extends M2 to cover pin YHigh, so I1.I M2 top reaches Y=300.
-func TestIntegration_Inv2Layout_Orientation(t *testing.T) {
+func TestIntegration_Inv2RawLayout_Orientation(t *testing.T) {
 	db, err := celldb.Load("testdata/cells.toml")
 	require.NoError(t, err)
 
 	const m3TrackWidth = 100
 
-	ll, ur, nl, err := netlist.BuildNets(
-		"testdata/inv2_layout.json",
-		"testdata/inv2_schematic.json",
-		db,
-		nil, nil, nil, nil,
-	)
+	layout, schem, err := netlist.LoadFiles("testdata/inv2_layout.json", "testdata/inv2_schematic.json")
+	require.NoError(t, err)
+	ll, ur, err := netlist.PRBoundary(layout)
+	require.NoError(t, err)
+	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1, "only net2 has 2+ pins")
 
@@ -132,12 +131,11 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 
 	const m3TrackWidth = 100
 
-	ll, ur, nl, err := netlist.BuildNets(
-		"testdata/inv_layout.json",
-		"testdata/inv_schematic.json",
-		db,
-		nil, nil, nil, nil,
-	)
+	layout, schem, err := netlist.LoadFiles("testdata/inv_layout.json", "testdata/inv_schematic.json")
+	require.NoError(t, err)
+	ll, ur, err := netlist.PRBoundary(layout)
+	require.NoError(t, err)
+	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
 

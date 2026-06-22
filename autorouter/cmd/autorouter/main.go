@@ -20,8 +20,8 @@ import (
 // --- request ---
 
 type request struct {
-	Layout    netlist.Layout    `json:"layout"`
-	Schematic netlist.Schematic `json:"schematic"`
+	Layout       netlist.RawLayout    `json:"layout"`
+	RawSchematic netlist.RawSchematic `json:"schematic"`
 }
 
 // --- response ---
@@ -187,7 +187,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	ll, ur, nl, err := netlist.BuildNetsFromData(req.Layout, req.Schematic, db, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets)
+	ll, ur, err := netlist.PRBoundary(req.Layout)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: pr boundary: %v\n", err)
+		os.Exit(1)
+	}
+	nl, err := netlist.BuildNetsFromData(req.Layout, req.RawSchematic, db,
+		[]string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

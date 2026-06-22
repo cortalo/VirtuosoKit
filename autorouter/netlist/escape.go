@@ -16,7 +16,7 @@ import (
 // contactVC is the via config for poly contacts (CC/CNT cuts).
 // Instances whose cell is not marked escape are silently skipped.
 // Pins absent from cells.toml are silently skipped.
-func BuildEscapeShapes(layout Layout, db PinDB, contactVC common.ViaConfig) ([]common.Shape, error) {
+func BuildEscapeShapes(layout RawLayout, db PinDB, contactVC common.ViaConfig) ([]common.Shape, error) {
 	var shapes []common.Shape
 	for _, inst := range layout.Instances {
 		isEscape, err := db.IsEscapeCell(inst.Lib, inst.Cell)

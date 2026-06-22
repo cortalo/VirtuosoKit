@@ -110,12 +110,11 @@ func TestExpandSchematicInstances(t *testing.T) {
 	}
 	got := expandSchematicInstances(insts)
 	require.Len(t, got, 4)
-	assert.Equal(t, "I0<2>", got[0].Name)
-	assert.Equal(t, "I0<1>", got[1].Name)
-	assert.Equal(t, "I0<0>", got[2].Name)
-	assert.Equal(t, "I5", got[3].Name)
-	for _, g := range got {
-		assert.Equal(t, "mylib", g.Lib)
+	for _, name := range []string{"I0<2>", "I0<1>", "I0<0>", "I5"} {
+		inst, ok := got[name]
+		require.True(t, ok, "missing instance %q", name)
+		assert.Equal(t, name, inst.Name)
+		assert.Equal(t, "mylib", inst.Lib)
 	}
 }
 
@@ -127,9 +126,9 @@ func TestParseOrient(t *testing.T) {
 	assert.Equal(t, "R0", parseOrient("R0"))
 }
 
-// twoInstLayout builds a minimal Layout with a prBoundary and two instances of the same cell.
-func twoInstLayout(lib, cell string, i0xy, i1xy [2]float64, i0terms, i1terms map[string]TerminalInfo) Layout {
-	return Layout{
+// twoInstLayout builds a minimal RawLayout with a prBoundary and two instances of the same cell.
+func twoInstLayout(lib, cell string, i0xy, i1xy [2]float64, i0terms, i1terms map[string]TerminalInfo) RawLayout {
+	return RawLayout{
 		Shapes: []LayoutShape{{Layer: "prBoundary", BBox: [2][2]float64{{0, 0}, {10, 10}}}},
 		Instances: []LayoutInstance{
 			{Name: "I0", Lib: lib, Cell: cell, XY: i0xy, Orient: "R0", Terminals: i0terms},
@@ -138,8 +137,8 @@ func twoInstLayout(lib, cell string, i0xy, i1xy [2]float64, i0terms, i1terms map
 	}
 }
 
-func twoInstSchem(lib string, pinName string) Schematic {
-	return Schematic{
+func twoInstSchem(lib string, pinName string) RawSchematic {
+	return RawSchematic{
 		Instances: []SchematicInstance{{Name: "I0", Lib: lib}, {Name: "I1", Lib: lib}},
 		Nets:      map[string][]string{"net1": {"I0." + pinName, "I1." + pinName}},
 	}
@@ -155,7 +154,7 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 2.0}, [2]float64{3.0, 4.0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	_, _, nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
@@ -182,7 +181,7 @@ func TestBuildNets_EscapeCell_PinInDB_UsesTransformAndOffset(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 0.0}, [2]float64{2.0, 0.0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	_, _, nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
@@ -204,7 +203,7 @@ func TestBuildNets_EscapeCell_PinFromTerminal(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{99.0, 99.0}, [2]float64{99.0, 99.0}, i0terms, i1terms)
 	schem := twoInstSchem("mylib", "G")
 
-	_, _, nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
@@ -230,7 +229,7 @@ func TestBuildNets_EscapeCell_MissingTerminal_ReturnsError(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
 	schem := twoInstSchem("mylib", "G")
 
-	_, _, _, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 
 	assert.Error(t, err)
 }
@@ -244,7 +243,7 @@ func TestBuildNets_NonEscapeCell_PinNotFound_ReturnsError(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	_, _, _, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
 
 	assert.Error(t, err)
 }

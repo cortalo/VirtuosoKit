@@ -23,8 +23,8 @@ func countLayer(shapes []common.Shape, layer common.Layer) int {
 
 var testContactVC = common.ViaConfig{CutW: 80, CutH: 80, SpaceX: 20, SpaceY: 20}
 
-func escapeLayout(instances []LayoutInstance) Layout {
-	return Layout{Instances: instances}
+func escapeLayout(instances []LayoutInstance) RawLayout {
+	return RawLayout{Instances: instances}
 }
 
 // ── BuildEscapeShapes integration tests ──────────────────────────────────────
@@ -292,9 +292,9 @@ func TestEscapePathShapes_PCAbovePin(t *testing.T) {
 		}
 	}
 	assert.Equal(t, common.Point{X: 100, Y: 0}, vertPC.LowerLeft)    // extended down to pinY0
-	assert.Equal(t, common.Point{X: 200, Y: 700}, vertPC.UpperRight)  // original pcY1 preserved
+	assert.Equal(t, common.Point{X: 200, Y: 700}, vertPC.UpperRight) // original pcY1 preserved
 
-	assert.Equal(t, common.Point{X: 0, Y: 0}, horizPC.LowerLeft)     // pinX0..pcX1
+	assert.Equal(t, common.Point{X: 0, Y: 0}, horizPC.LowerLeft) // pinX0..pcX1
 	assert.Equal(t, common.Point{X: 200, Y: 200}, horizPC.UpperRight)
 
 	// M1 is exactly the pin from cells.toml.
