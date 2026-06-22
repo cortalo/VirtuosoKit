@@ -159,20 +159,23 @@ func main() {
 	innovus := flag.Bool("innovus", false, "write Verilog for Innovus instead of routing")
 	moduleName := flag.String("module-name", "", "Verilog module name (required with -innovus)")
 	outputPath := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
+	pinsOutput := flag.String("pins-output", "", "absolute path for pin coordinates JSON file (required with -innovus)")
 	flag.Parse()
 
 	if *innovus {
-		if *moduleName == "" {
-			fmt.Fprintf(os.Stderr, "error: -module-name is required with -innovus\n")
-			os.Exit(1)
-		}
-		if *outputPath == "" {
-			fmt.Fprintf(os.Stderr, "error: -output is required with -innovus\n")
-			os.Exit(1)
-		}
-		if !filepath.IsAbs(*outputPath) {
-			fmt.Fprintf(os.Stderr, "error: -output must be an absolute path, got %q\n", *outputPath)
-			os.Exit(1)
+		for flag, val := range map[string]string{
+			"-module-name": *moduleName,
+			"-output":      *outputPath,
+			"-pins-output": *pinsOutput,
+		} {
+			if val == "" {
+				fmt.Fprintf(os.Stderr, "error: %s is required with -innovus\n", flag)
+				os.Exit(1)
+			}
+			if flag != "-module-name" && !filepath.IsAbs(val) {
+				fmt.Fprintf(os.Stderr, "error: %s must be an absolute path, got %q\n", flag, val)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -213,9 +216,17 @@ func main() {
 	}
 
 	if *innovus {
-		verilog := writeVerilog(*moduleName, nl)
-		if err := os.WriteFile(*outputPath, []byte(verilog), 0644); err != nil {
+		if err := os.WriteFile(*outputPath, []byte(writeVerilog(*moduleName, nl)), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "error: write verilog: %v\n", err)
+			os.Exit(1)
+		}
+		pinsJSON, err := writePinsJSON(nl)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: marshal pins: %v\n", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(*pinsOutput, pinsJSON, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "error: write pins: %v\n", err)
 			os.Exit(1)
 		}
 		return
