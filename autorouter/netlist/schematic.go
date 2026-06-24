@@ -203,12 +203,32 @@ func expandInstPin(instPin string) []string {
 		return []string{instPin}
 	}
 	insts := expandBusName(instPin[:dot])
-	pin := instPin[dot:]
-	result := make([]string, len(insts))
-	for i, inst := range insts {
-		result[i] = inst + pin
+	pins := expandBusName(instPin[dot+1:])
+	switch {
+	case len(insts) == 1 && len(pins) == 1:
+		return []string{insts[0] + "." + pins[0]}
+	case len(insts) == 1:
+		result := make([]string, len(pins))
+		for i, p := range pins {
+			result[i] = insts[0] + "." + p
+		}
+		return result
+	case len(pins) == 1:
+		result := make([]string, len(insts))
+		for i, inst := range insts {
+			result[i] = inst + "." + pins[0]
+		}
+		return result
+	default:
+		// Both expanded: lengths must match (checked later in expandNets).
+		result := make([]string, len(insts))
+		for i := range insts {
+			if i < len(pins) {
+				result[i] = insts[i] + "." + pins[i]
+			}
+		}
+		return result
 	}
-	return result
 }
 
 // expandNets flattens bus-notation net entries into a plain net→instPins map.

@@ -64,6 +64,27 @@ func TestExpandInstPin_BusInst(t *testing.T) {
 	assert.Equal(t, []string{"I0<2>.A1", "I0<1>.A1", "I0<0>.A1"}, expandInstPin("I0<2:0>.A1"))
 }
 
+func TestExpandInstPin_BusPin(t *testing.T) {
+	// Pin part carries the bus notation: single inst, bus pin → expand pin.
+	assert.Equal(t,
+		[]string{"Ipulse_filter.width<3>", "Ipulse_filter.width<2>", "Ipulse_filter.width<1>", "Ipulse_filter.width<0>"},
+		expandInstPin("Ipulse_filter.width<3:0>"),
+	)
+}
+
+func TestExpandNets_BusNetBusPin(t *testing.T) {
+	// "FILTER_WIDTH<3:0>": ["Ipulse_filter.width<3:0>"] should expand 1:1 into 4 pairs.
+	raw := map[string][]string{
+		"FILTER_WIDTH<3:0>": {"Ipulse_filter.width<3:0>"},
+	}
+	got, err := expandNets(raw)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Ipulse_filter.width<3>"}, got["FILTER_WIDTH<3>"])
+	assert.Equal(t, []string{"Ipulse_filter.width<2>"}, got["FILTER_WIDTH<2>"])
+	assert.Equal(t, []string{"Ipulse_filter.width<1>"}, got["FILTER_WIDTH<1>"])
+	assert.Equal(t, []string{"Ipulse_filter.width<0>"}, got["FILTER_WIDTH<0>"])
+}
+
 func TestExpandNets_Simple(t *testing.T) {
 	raw := map[string][]string{
 		"VSS":     {"I5.VSS", "I6.VSS"}, // scalar → both pins on same net
