@@ -82,6 +82,35 @@ endmodule
 `,
 		},
 		{
+			// MID is an internal net (2 instance pins) that is also a top-level port.
+			// Both I0_I (instance sink) and MID (port) must appear as outputs,
+			// each with their own assign statement.
+			name:       "internal net also exposed as top-level port",
+			moduleName: "route",
+			nl: &common.Netlist{
+				Nets: []*common.Net{
+					{Name: "MID", Driver: "I1.ZN", Pins: []common.RoutingPin{
+						{Name: "I1.ZN"},
+						{Name: "I0.I"},
+					}},
+				},
+				Pins: []*common.RoutingPin{
+					{Name: "MID"},
+				},
+			},
+			want: `module route (
+    input  I1_ZN,
+    output I0_I,
+    output MID
+);
+
+    assign I0_I = I1_ZN;
+    assign MID = I1_ZN;
+
+endmodule
+`,
+		},
+		{
 			name:       "multiple nets",
 			moduleName: "route",
 			nl: &common.Netlist{

@@ -12,6 +12,11 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 	outputs := map[string]struct{}{}
 	var assigns []string
 
+	portNames := make(map[string]struct{}, len(nl.Pins))
+	for _, p := range nl.Pins {
+		portNames[p.Name] = struct{}{}
+	}
+
 	for _, net := range nl.Nets {
 		if net.Driver == "" {
 			continue
@@ -26,9 +31,11 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 			}
 			sinks = append(sinks, toPortName(pin.Name))
 		}
-		// Port net whose only pin is the driver (e.g. VOUT: driven by I0.VOUT).
-		// The net name itself is the output port.
-		if len(sinks) == 0 && strings.Contains(net.Driver, ".") && !strings.Contains(net.Name, ".") {
+		// If the net is a top-level port driven by an inst.pin, add the port name
+		// as an output sink (covers both: sole-pin case like VOUT, and internal
+		// nets also exposed as ports like MID).
+		_, isPort := portNames[net.Name]
+		if isPort && strings.Contains(net.Driver, ".") {
 			sinks = append(sinks, net.Name)
 		}
 		for _, sink := range sinks {
