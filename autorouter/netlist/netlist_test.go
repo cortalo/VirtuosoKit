@@ -145,7 +145,7 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 2.0}, [2]float64{3.0, 4.0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
 
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
@@ -168,7 +168,7 @@ func TestBuildNets_PinNotFound_ReturnsError(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
 
 	assert.Error(t, err)
 }
@@ -216,12 +216,10 @@ func TestTransformPin(t *testing.T) {
 // TestBuildNetsFromData_TerminalFallback exercises the terminal-fallback path
 // (empty celldb → all pin positions come from inst.Terminals).
 //
-// Layout has two inv instances; schematic has:
-//   - net1: I1.VOUT → I0.VIN  (2 pins → routed)
-//   - VDD, VSS: 2 pins each   (routed)
-//   - VOUT, VIN: 1 pin each   (dropped — below 2-pin threshold, but appear as layout pins)
-//
-// Top-level ports: VIN, VOUT, VDD, VSS.
+// Layout has two inv instances; schematic has (after ignoring VDD/VSS):
+//   - net1: I1.VOUT → I0.VIN  (2 pins, internal,    Driver="I1.VOUT")
+//   - VIN:  I1.VIN             (1-pin port net,       Driver="VIN"    — top-level input port)
+//   - VOUT: I0.VOUT            (1-pin port net,       Driver="I0.VOUT"— instance output)
 func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 	layout, schem, err := LoadFiles(
 		"testdata/inv2_terminal_layout.json",
@@ -231,7 +229,7 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 
 	db := &stubDB{pins: map[string]stubPinData{}} // empty → terminal fallback for all
 
-	nl, err := BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil)
+	nl, err := BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	require.NoError(t, err)
 
 	// ── layout pins (top-level ports) ────────────────────────────────────────
@@ -253,37 +251,75 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	// ── routing nets ─────────────────────────────────────────────────────────
-	wantNets := map[string]bool{"net1": false}
-	assert.Len(t, nl.Nets, len(wantNets), "unexpected number of nets")
-	for _, net := range nl.Nets {
-		wantNets[net.Name] = true
-		assert.GreaterOrEqual(t, len(net.Pins), 2, "net %q has fewer than 2 pins", net.Name)
-		for i, p := range net.Pins {
-			// Name must be "InstName.PinName" — exactly one dot.
-			assert.Equal(t, 1, strings.Count(p.Name, "."),
-				"net %q pin[%d] Name %q: expected exactly one dot", net.Name, i, p.Name)
-			assert.True(t, p.XLow < p.XHigh,
-				"net %q pin[%d] %q: XLow >= XHigh", net.Name, i, p.Name)
-			assert.True(t, p.YLow < p.YHigh,
-				"net %q pin[%d] %q: YLow >= YHigh", net.Name, i, p.Name)
-			assert.NotZero(t, p.Layer,
-				"net %q pin[%d] %q: zero Layer", net.Name, i, p.Name)
-		}
-
-		// Driver must be non-empty and must resolve to an output pin in the schematic.
-		assert.NotEmpty(t, net.Driver, "net %q: Driver is empty", net.Name)
-		if net.Driver != "" {
-			parts := strings.SplitN(net.Driver, ".", 2)
-			require.Lenf(t, parts, 2, "net %q Driver %q: expected inst.pin format", net.Name, net.Driver)
-			inst, ok := expanded.Instances[parts[0]]
-			require.Truef(t, ok, "net %q Driver %q: instance not found in schematic", net.Name, net.Driver)
-			dir, ok := inst.Pins[parts[1]]
-			require.Truef(t, ok, "net %q Driver %q: pin not found in schematic instance", net.Name, net.Driver)
-			assert.Equal(t, PinDirOutput, dir,
-				"net %q Driver %q: expected output direction", net.Name, net.Driver)
-		}
+	type wantPinData struct {
+		name                     string
+		layer                    common.Layer
+		xLow, xHigh, yLow, yHigh int
 	}
-	for name, seen := range wantNets {
-		assert.True(t, seen, "expected net %q not found", name)
+	type wantNetData struct {
+		driver string
+		pins   []wantPinData
+	}
+	// Coordinates in nm (µm × 1000), from testdata terminal bboxes.
+	wantNets := map[string]wantNetData{
+		"net1": {
+			driver: "I1.VOUT",
+			pins: []wantPinData{
+				{"I1.VOUT", common.M1, 4000, 4230, 6220, 8140},
+				{"I0.VIN", common.M1, 8090, 8320, 4365, 4595},
+			},
+		},
+		"VIN": {
+			driver: "VIN",
+			pins: []wantPinData{
+				{"I1.VIN", common.M1, 2090, 2320, 4365, 4595},
+			},
+		},
+		"VOUT": {
+			driver: "I0.VOUT",
+			pins: []wantPinData{
+				{"I0.VOUT", common.M1, 10000, 10230, 6220, 8140},
+			},
+		},
+	}
+	assert.Len(t, nl.Nets, len(wantNets), "unexpected number of nets")
+
+	byNetName := make(map[string]*common.Net, len(nl.Nets))
+	for _, net := range nl.Nets {
+		byNetName[net.Name] = net
+	}
+
+	for netName, want := range wantNets {
+		t.Run(netName, func(t *testing.T) {
+			net, ok := byNetName[netName]
+			require.Truef(t, ok, "net %q missing", netName)
+			assert.Equal(t, want.driver, net.Driver)
+
+			if strings.Contains(want.driver, ".") {
+				parts := strings.SplitN(want.driver, ".", 2)
+				inst, ok := expanded.Instances[parts[0]]
+				require.Truef(t, ok, "driver instance %q not found", parts[0])
+				assert.Equal(t, PinDirOutput, inst.Pins[parts[1]])
+			} else {
+				dir, ok := expanded.Pins[want.driver]
+				require.Truef(t, ok, "driver port %q not found", want.driver)
+				assert.Equal(t, PinDirInput, dir)
+			}
+
+			require.Len(t, net.Pins, len(want.pins))
+			byPin := make(map[string]common.RoutingPin, len(net.Pins))
+			for _, p := range net.Pins {
+				byPin[p.Name] = p
+			}
+			for _, wp := range want.pins {
+				p, ok := byPin[wp.name]
+				require.Truef(t, ok, "pin %q missing", wp.name)
+				assert.Equal(t, wp.layer, p.Layer, "layer")
+				assert.Equal(t, wp.xLow, p.XLow, "XLow")
+				assert.Equal(t, wp.xHigh, p.XHigh, "XHigh")
+				assert.Equal(t, wp.yLow, p.YLow, "YLow")
+				assert.Equal(t, wp.yHigh, p.YHigh, "YHigh")
+			}
+		})
 	}
 }

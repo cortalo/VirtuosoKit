@@ -39,7 +39,7 @@ func TestIntegration_Inv2RawLayout_Orientation(t *testing.T) {
 	require.NoError(t, err)
 	ll, ur, err := netlist.PRBoundary(layout)
 	require.NoError(t, err)
-	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1, "only net2 has 2+ pins")
 
@@ -135,7 +135,7 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 	require.NoError(t, err)
 	ll, ur, err := netlist.PRBoundary(layout)
 	require.NoError(t, err)
-	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil)
+	nl, err := netlist.BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
 

@@ -19,11 +19,19 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 		drv := toPortName(net.Driver)
 		inputs[drv] = struct{}{}
 
+		var sinks []string
 		for _, pin := range net.Pins {
 			if pin.Name == "" || pin.Name == net.Driver {
 				continue
 			}
-			sink := toPortName(pin.Name)
+			sinks = append(sinks, toPortName(pin.Name))
+		}
+		// Port net whose only pin is the driver (e.g. VOUT: driven by I0.VOUT).
+		// The net name itself is the output port.
+		if len(sinks) == 0 && strings.Contains(net.Driver, ".") && !strings.Contains(net.Name, ".") {
+			sinks = append(sinks, net.Name)
+		}
+		for _, sink := range sinks {
 			outputs[sink] = struct{}{}
 			assigns = append(assigns, fmt.Sprintf("    assign %s = %s;", sink, drv))
 		}

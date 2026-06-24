@@ -26,7 +26,7 @@ func toSet(ss []string) StringSet {
 	return s
 }
 
-func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []string) ([]*common.Net, error) {
+func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []string, includePortNets bool) ([]*common.Net, error) {
 	minOverlapSet := toSet(minOverlapLibs)
 	netNames := make([]string, 0, len(schematic.Nets))
 	for name := range schematic.Nets {
@@ -85,7 +85,8 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 				MinOverlap: isMinOverlap,
 			})
 		}
-		if len(pins) < 2 {
+		_, isPort := schematic.Pins[name]
+		if len(pins) == 0 || (len(pins) < 2 && !(includePortNets && isPort)) {
 			continue
 		}
 		nets = append(nets, &common.Net{
@@ -117,69 +118,79 @@ func findDriver(netName string, instPins []string, schematic Schematic) string {
 			}
 		}
 	}
-	if count == 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has no output driver\n", netName)
-	} else if count > 1 {
+	if count > 1 {
 		_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has %d output drivers, using %q\n", netName, count, driver)
+		return driver
 	}
-	return driver
+	if count == 1 {
+		return driver
+	}
+	// No instance output pin — check if a top-level input port drives this net.
+	if dir, ok := schematic.Pins[netName]; ok && dir == PinDirInput {
+		return netName
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has no output driver\n", netName)
+	return ""
 }
 
 func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string) ([]*common.RoutingPin, error) {
 	ignoreNetsSet := toSet(ignoreNets)
+	portNames := make([]string, 0, len(schematic.Pins))
+	for name := range schematic.Pins {
+		portNames = append(portNames, name)
+	}
+	sort.Strings(portNames)
 	var layoutPins []*common.RoutingPin
-	for _, rawName := range schematic.PinNames {
-		for _, name := range expandNetKey(rawName) {
-			if _, skip := ignoreNetsSet[name]; skip {
-				continue
+	for _, name := range portNames {
+		if _, skip := ignoreNetsSet[name]; skip {
+			continue
+		}
+		instPinList, ok := schematic.Nets[name]
+		if !ok || len(instPinList) == 0 {
+			continue
+		}
+		parts := strings.SplitN(instPinList[0], ".", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("netlist: invalid inst.pin %q in pin %q", instPinList[0], name)
+		}
+		inst, ok := layout.Instances[parts[0]]
+		if !ok {
+			return nil, fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
+		}
+		xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
+		if qerr != nil {
+			if !errors.Is(qerr, common.ErrPinNotFound) {
+				return nil, fmt.Errorf("netlist: pin %q: %w", name, qerr)
 			}
-			instPinList, ok := schematic.Nets[name]
-			if !ok || len(instPinList) == 0 {
-				continue
+			term, hasTerm := inst.Terminals[parts[1]]
+			if !hasTerm {
+				return nil, fmt.Errorf("netlist: pin %q: %w", name, qerr)
 			}
-			parts := strings.SplitN(instPinList[0], ".", 2)
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("netlist: invalid inst.pin %q in pin %q", instPinList[0], name)
+			termLayer, lerr := common.ParseLayer(term.Layer)
+			if lerr != nil {
+				return nil, fmt.Errorf("netlist: pin %q: terminal layer %q: %w", name, term.Layer, lerr)
 			}
-			inst, ok := layout.Instances[parts[0]]
-			if !ok {
-				return nil, fmt.Errorf("netlist: instance %q not found in layout for pin %q", parts[0], name)
-			}
-			xLow, xHigh, yLow, yHigh, pinLayer, qerr := db.Query(inst.Lib, inst.Cell, parts[1])
-			if qerr != nil {
-				if !errors.Is(qerr, common.ErrPinNotFound) {
-					return nil, fmt.Errorf("netlist: pin %q: %w", name, qerr)
-				}
-				term, hasTerm := inst.Terminals[parts[1]]
-				if !hasTerm {
-					return nil, fmt.Errorf("netlist: pin %q: %w", name, qerr)
-				}
-				termLayer, lerr := common.ParseLayer(term.Layer)
-				if lerr != nil {
-					return nil, fmt.Errorf("netlist: pin %q: terminal layer %q: %w", name, term.Layer, lerr)
-				}
-				layoutPins = append(layoutPins, &common.RoutingPin{
-					Name:  name,
-					Layer: termLayer,
-					XLow:  int(math.Round(term.Bbox[0][0] * 1000)),
-					YLow:  int(math.Round(term.Bbox[0][1] * 1000)),
-					XHigh: int(math.Round(term.Bbox[1][0] * 1000)),
-					YHigh: int(math.Round(term.Bbox[1][1] * 1000)),
-				})
-				continue
-			}
-			instX := int(math.Round(inst.XY[0] * 1000))
-			instY := int(math.Round(inst.XY[1] * 1000))
-			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 			layoutPins = append(layoutPins, &common.RoutingPin{
 				Name:  name,
-				Layer: pinLayer,
-				XLow:  instX + txLow,
-				XHigh: instX + txHigh,
-				YLow:  instY + tyLow,
-				YHigh: instY + tyHigh,
+				Layer: termLayer,
+				XLow:  int(math.Round(term.Bbox[0][0] * 1000)),
+				YLow:  int(math.Round(term.Bbox[0][1] * 1000)),
+				XHigh: int(math.Round(term.Bbox[1][0] * 1000)),
+				YHigh: int(math.Round(term.Bbox[1][1] * 1000)),
 			})
+			continue
 		}
+		instX := int(math.Round(inst.XY[0] * 1000))
+		instY := int(math.Round(inst.XY[1] * 1000))
+		txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
+		layoutPins = append(layoutPins, &common.RoutingPin{
+			Name:  name,
+			Layer: pinLayer,
+			XLow:  instX + txLow,
+			XHigh: instX + txHigh,
+			YLow:  instY + tyLow,
+			YHigh: instY + tyHigh,
+		})
 	}
 	return layoutPins, nil
 }
@@ -190,7 +201,7 @@ func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string
 // Pins whose instance lib is in minOverlapLibs have RoutingPin.MinOverlap set to true.
 // ignoreLibNets is a list of "lib:net" pairs: pins of those nets are skipped only
 // when the pin's instance lib matches.
-func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string) (nl *common.Netlist, err error) {
+func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string, includePortNets bool) (nl *common.Netlist, err error) {
 	schematic, err := rawSchematic.Expand()
 	if err != nil {
 		return
@@ -198,7 +209,7 @@ func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB,
 	schematic = schematic.Filter(ignoreNets, ignoreLibs, ignoreLibNets)
 	layout := rawLayout.Index()
 
-	nets, err := buildNets(layout, schematic, db, minOverlapLibs)
+	nets, err := buildNets(layout, schematic, db, minOverlapLibs, includePortNets)
 	if err != nil {
 		return
 	}

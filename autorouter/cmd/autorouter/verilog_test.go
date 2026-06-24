@@ -147,18 +147,28 @@ func TestWriteVerilog_InvChain(t *testing.T) {
 	}
 
 	db := &emptyDB{}
-	nl, err := netlist.BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil)
+	nl, err := netlist.BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("build nets: %v", err)
 	}
 
 	got := writeVerilog("inv_chain", nl)
+	// With includePortNets=true:
+	//   net1:  I1.VOUT (driver) → I0.VIN        →  assign I0_VIN = I1_VOUT
+	//   VIN:   "VIN" (top-level input port)  → I1.VIN  →  assign I1_VIN = VIN
+	//   VOUT:  I0.VOUT (driver, only inst pin) → VOUT (port) →  assign VOUT = I0_VOUT
 	want := `module inv_chain (
+    input  I0_VOUT,
     input  I1_VOUT,
-    output I0_VIN
+    input  VIN,
+    output I0_VIN,
+    output I1_VIN,
+    output VOUT
 );
 
     assign I0_VIN = I1_VOUT;
+    assign I1_VIN = VIN;
+    assign VOUT = I0_VOUT;
 
 endmodule
 `

@@ -209,7 +209,7 @@ func main() {
 	}
 
 	nl, err := netlist.BuildNetsFromData(req.Layout, req.RawSchematic, db,
-		[]string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets))
+		[]string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets), *innovus)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

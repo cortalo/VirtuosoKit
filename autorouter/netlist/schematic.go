@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -71,8 +70,7 @@ type SchematicInstance struct {
 type Schematic struct {
 	Instances map[string]SchematicInstance
 	Nets      map[string][]string
-	Pins      map[string]json.RawMessage
-	PinNames  []string // sorted raw pin keys from RawSchematic.Pins
+	Pins      map[string]PinDir // top-level port name → direction
 }
 
 // Expand resolves bus notation and returns a Schematic with instances indexed by name.
@@ -81,16 +79,22 @@ func (r RawSchematic) Expand() (Schematic, error) {
 	if err != nil {
 		return Schematic{}, err
 	}
-	pinNames := make([]string, 0, len(r.Pins))
-	for name := range r.Pins {
-		pinNames = append(pinNames, name)
+	pins := make(map[string]PinDir, len(r.Pins))
+	for rawName, raw := range r.Pins {
+		var entry struct {
+			Direction PinDir `json:"direction"`
+		}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return Schematic{}, fmt.Errorf("netlist: pin %q direction: %w", rawName, err)
+		}
+		for _, name := range expandNetKey(rawName) {
+			pins[name] = entry.Direction
+		}
 	}
-	sort.Strings(pinNames)
 	return Schematic{
 		Instances: expandSchematicInstances(r.Instances),
 		Nets:      nets,
-		Pins:      r.Pins,
-		PinNames:  pinNames,
+		Pins:      pins,
 	}, nil
 }
 
@@ -131,7 +135,7 @@ func (s Schematic) Filter(ignoreNets, ignoreLibs, ignoreLibNets []string) Schema
 			nets[netName] = filtered
 		}
 	}
-	return Schematic{Instances: s.Instances, Nets: nets, Pins: s.Pins, PinNames: s.PinNames}
+	return Schematic{Instances: s.Instances, Nets: nets, Pins: s.Pins}
 }
 
 // parseLibNets converts "lib:net" strings into a map[lib]StringSet.
