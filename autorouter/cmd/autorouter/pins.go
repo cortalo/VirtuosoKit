@@ -31,3 +31,22 @@ func collectPins(nl *common.Netlist) []pinEntry {
 func writePinsJSON(nl *common.Netlist) ([]byte, error) {
 	return json.MarshalIndent(collectPins(nl), "", "  ")
 }
+
+// writeNetConnectionsJSON returns a JSON object mapping each net name to the
+// list of instance terminal names (inst.pin format) that belong to that net.
+// This lets the Python caller resolve which terminal to use when auto-placing
+// a top-level port pin, using Go's fully-resolved netlist rather than the
+// primitive Python schematic reader.
+func writeNetConnectionsJSON(nl *common.Netlist) ([]byte, error) {
+	connections := make(map[string][]string, len(nl.Nets))
+	for _, net := range nl.Nets {
+		terminals := make([]string, 0, len(net.Pins))
+		for _, p := range net.Pins {
+			terminals = append(terminals, p.Name)
+		}
+		if len(terminals) > 0 {
+			connections[net.Name] = terminals
+		}
+	}
+	return json.MarshalIndent(connections, "", "  ")
+}

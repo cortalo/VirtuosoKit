@@ -157,16 +157,18 @@ func main() {
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	widenNarrowPins := flag.Bool("widen-narrow-pins", false, "widen M1 pins narrower than m2-width to m2-width, centered on the pin (classic mode)")
 	innovus := flag.Bool("innovus", false, "write Verilog for Innovus instead of routing")
-	moduleName := flag.String("module-name", "", "Verilog module name (required with -innovus)")
-	outputPath := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
-	pinsOutput := flag.String("pins-output", "", "absolute path for pin coordinates JSON file (required with -innovus)")
+	moduleName        := flag.String("module-name", "", "Verilog module name (required with -innovus)")
+	outputPath        := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
+	pinsOutput        := flag.String("pins-output", "", "absolute path for pin coordinates JSON file (required with -innovus)")
+	connectionsOutput := flag.String("connections-output", "", "absolute path for net connections JSON file (required with -innovus)")
 	flag.Parse()
 
 	if *innovus {
 		for flag, val := range map[string]string{
-			"-module-name": *moduleName,
-			"-output":      *outputPath,
-			"-pins-output": *pinsOutput,
+			"-module-name":        *moduleName,
+			"-output":             *outputPath,
+			"-pins-output":        *pinsOutput,
+			"-connections-output": *connectionsOutput,
 		} {
 			if val == "" {
 				fmt.Fprintf(os.Stderr, "error: %s is required with -innovus\n", flag)
@@ -227,6 +229,15 @@ func main() {
 		}
 		if err := os.WriteFile(*pinsOutput, pinsJSON, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "error: write pins: %v\n", err)
+			os.Exit(1)
+		}
+		connJSON, err := writeNetConnectionsJSON(nl)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: marshal connections: %v\n", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(*connectionsOutput, connJSON, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "error: write connections: %v\n", err)
 			os.Exit(1)
 		}
 		return
