@@ -40,7 +40,7 @@ func TestParseLayer_AllValidLayers(t *testing.T) {
 }
 
 func TestParseLayer_Unknown_ReturnsError(t *testing.T) {
-	_, err := common.ParseLayer("M4")
+	_, err := common.ParseLayer("M7")
 	assert.Error(t, err)
 }
 

@@ -25,6 +25,9 @@ const (
 	M1
 	M2
 	M3
+	M4
+	M5
+	M6
 	Contact // poly contact cut (CC/CNT) between PC and M1
 	Via12
 	Via23
@@ -40,6 +43,12 @@ func (l Layer) MarshalJSON() ([]byte, error) {
 		return json.Marshal("M2")
 	case M3:
 		return json.Marshal("M3")
+	case M4:
+		return json.Marshal("M4")
+	case M5:
+		return json.Marshal("M5")
+	case M6:
+		return json.Marshal("M6")
 	case Contact:
 		return json.Marshal("Contact")
 	case Via12:
@@ -55,12 +64,18 @@ func ParseLayer(s string) (Layer, error) {
 	switch s {
 	case "PC":
 		return PC, nil
-	case "M1":
+	case "M1", "METAL1":
 		return M1, nil
-	case "M2":
+	case "M2", "METAL2":
 		return M2, nil
-	case "M3":
+	case "M3", "METAL3":
 		return M3, nil
+	case "M4", "METAL4":
+		return M4, nil
+	case "M5", "METAL5":
+		return M5, nil
+	case "M6", "METAL6":
+		return M6, nil
 	case "Contact":
 		return Contact, nil
 	case "Via12":
