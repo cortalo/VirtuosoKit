@@ -90,47 +90,12 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 			continue
 		}
 		nets = append(nets, &common.Net{
-			ID:     netID + 1,
-			Name:   name,
-			Pins:   pins,
-			Driver: findDriver(name, instPins, schematic),
+			ID:   netID + 1,
+			Name: name,
+			Pins: pins,
 		})
 	}
 	return nets, nil
-}
-
-func findDriver(netName string, instPins []string, schematic Schematic) string {
-	var driver string
-	var count int
-	for _, instPin := range instPins {
-		parts := strings.SplitN(instPin, ".", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		inst, ok := schematic.Instances[parts[0]]
-		if !ok {
-			continue
-		}
-		if inst.Pins[parts[1]] == PinDirOutput {
-			count++
-			if driver == "" {
-				driver = instPin
-			}
-		}
-	}
-	if count > 1 {
-		_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has %d output drivers, using %q\n", netName, count, driver)
-		return driver
-	}
-	if count == 1 {
-		return driver
-	}
-	// No instance output pin — check if a top-level input port drives this net.
-	if dir, ok := schematic.Pins[netName]; ok && dir == PinDirInput {
-		return netName
-	}
-	_, _ = fmt.Fprintf(os.Stderr, "warning: net %q has no output driver\n", netName)
-	return ""
 }
 
 func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string) ([]*common.RoutingPin, error) {

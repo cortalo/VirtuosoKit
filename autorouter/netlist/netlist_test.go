@@ -2,7 +2,6 @@ package netlist
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"autorouter/common"
@@ -238,9 +237,9 @@ func TestTransformPin(t *testing.T) {
 // (empty celldb → all pin positions come from inst.Terminals).
 //
 // Layout has two inv instances; schematic has (after ignoring VDD/VSS):
-//   - net1: I1.VOUT → I0.VIN  (2 pins, internal,    Driver="I1.VOUT")
-//   - VIN:  I1.VIN             (1-pin port net,       Driver="VIN"    — top-level input port)
-//   - VOUT: I0.VOUT            (1-pin port net,       Driver="I0.VOUT"— instance output)
+//   - net1: I1.VOUT, I0.VIN  (2-pin internal net)
+//   - VIN:  I1.VIN            (1-pin port net)
+//   - VOUT: I0.VOUT           (1-pin port net)
 func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 	layout, schem, err := LoadFiles(
 		"testdata/inv2_terminal_layout.json",
@@ -267,10 +266,6 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 		assert.True(t, seen, "expected layout pin %q not found", name)
 	}
 
-	// Expand schematic once so we can look up pin directions for Driver checks.
-	expanded, err := schem.Expand()
-	require.NoError(t, err)
-
 	// ── routing nets ─────────────────────────────────────────────────────────
 	type wantPinData struct {
 		name                     string
@@ -278,26 +273,22 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 		xLow, xHigh, yLow, yHigh int
 	}
 	type wantNetData struct {
-		driver string
-		pins   []wantPinData
+		pins []wantPinData
 	}
 	// Coordinates in nm (µm × 1000), from testdata terminal bboxes.
 	wantNets := map[string]wantNetData{
 		"net1": {
-			driver: "I1.VOUT",
 			pins: []wantPinData{
 				{"I1.VOUT", common.M1, 4000, 4230, 6220, 8140},
 				{"I0.VIN", common.M1, 8090, 8320, 4365, 4595},
 			},
 		},
 		"VIN": {
-			driver: "VIN",
 			pins: []wantPinData{
 				{"I1.VIN", common.M1, 2090, 2320, 4365, 4595},
 			},
 		},
 		"VOUT": {
-			driver: "I0.VOUT",
 			pins: []wantPinData{
 				{"I0.VOUT", common.M1, 10000, 10230, 6220, 8140},
 			},
@@ -314,18 +305,6 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 		t.Run(netName, func(t *testing.T) {
 			net, ok := byNetName[netName]
 			require.Truef(t, ok, "net %q missing", netName)
-			assert.Equal(t, want.driver, net.Driver)
-
-			if strings.Contains(want.driver, ".") {
-				parts := strings.SplitN(want.driver, ".", 2)
-				inst, ok := expanded.Instances[parts[0]]
-				require.Truef(t, ok, "driver instance %q not found", parts[0])
-				assert.Equal(t, PinDirOutput, inst.Pins[parts[1]])
-			} else {
-				dir, ok := expanded.Pins[want.driver]
-				require.Truef(t, ok, "driver port %q not found", want.driver)
-				assert.Equal(t, PinDirInput, dir)
-			}
 
 			require.Len(t, net.Pins, len(want.pins))
 			byPin := make(map[string]common.RoutingPin, len(net.Pins))

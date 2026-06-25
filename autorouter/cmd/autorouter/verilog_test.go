@@ -22,68 +22,19 @@ endmodule
 `,
 		},
 		{
-			name:       "net with no driver is skipped",
-			moduleName: "route",
-			nl: &common.Netlist{
-				Nets: []*common.Net{
-					{Name: "net1", Driver: "", Pins: []common.RoutingPin{
-						{Name: "I0.ZN"},
-						{Name: "I1.I"},
-					}},
-				},
-			},
-			want: `module route ();
-endmodule
-`,
-		},
-		{
-			// Bus indices <N> in driver, sink, and port-net names must be rewritten
-			// to _N so the output is legal Verilog (angle brackets are not valid identifiers).
-			name:       "bus indices rewritten to underscores",
-			moduleName: "route",
-			nl: &common.Netlist{
-				Nets: []*common.Net{
-					// driver and sink both carry bus notation in pin part
-					{Name: "net1", Driver: "I0.s<0>", Pins: []common.RoutingPin{
-						{Name: "I0.s<0>"},
-						{Name: "I1.a<0>"},
-					}},
-					// net name itself is a bus bit and is a top-level port
-					{Name: "WIDTH<0>", Driver: "I2.width<0>", Pins: []common.RoutingPin{
-						{Name: "I2.width<0>"},
-					}},
-				},
-				Pins: []*common.RoutingPin{
-					{Name: "WIDTH<0>"},
-				},
-			},
-			want: `module route (
-    input  I0_s_0,
-    input  I2_width_0,
-    output I1_a_0,
-    output WIDTH_0
-);
-
-    assign I1_a_0 = I0_s_0;
-    assign WIDTH_0 = I2_width_0;
-
-endmodule
-`,
-		},
-		{
 			name:       "single net one sink",
 			moduleName: "route",
 			nl: &common.Netlist{
 				Nets: []*common.Net{
-					{Name: "net1", Driver: "I0.ZN", Pins: []common.RoutingPin{
+					{Name: "net1", Pins: []common.RoutingPin{
 						{Name: "I0.ZN"},
 						{Name: "I1.I"},
 					}},
 				},
 			},
 			want: `module route (
-    input  I0_ZN,
-    output I1_I
+    inout I0_ZN,
+    inout I1_I
 );
 
     assign I1_I = I0_ZN;
@@ -96,7 +47,7 @@ endmodule
 			moduleName: "route",
 			nl: &common.Netlist{
 				Nets: []*common.Net{
-					{Name: "net1", Driver: "I0.ZN", Pins: []common.RoutingPin{
+					{Name: "net1", Pins: []common.RoutingPin{
 						{Name: "I0.ZN"},
 						{Name: "I1.I"},
 						{Name: "I2.I"},
@@ -104,9 +55,9 @@ endmodule
 				},
 			},
 			want: `module route (
-    input  I0_ZN,
-    output I1_I,
-    output I2_I
+    inout I0_ZN,
+    inout I1_I,
+    inout I2_I
 );
 
     assign I1_I = I0_ZN;
@@ -117,13 +68,12 @@ endmodule
 		},
 		{
 			// MID is an internal net (2 instance pins) that is also a top-level port.
-			// Both I0_I (instance sink) and MID (port) must appear as outputs,
-			// each with their own assign statement.
+			// Port name is appended after instance pins; first pin drives all others.
 			name:       "internal net also exposed as top-level port",
 			moduleName: "route",
 			nl: &common.Netlist{
 				Nets: []*common.Net{
-					{Name: "MID", Driver: "I1.ZN", Pins: []common.RoutingPin{
+					{Name: "MID", Pins: []common.RoutingPin{
 						{Name: "I1.ZN"},
 						{Name: "I0.I"},
 					}},
@@ -133,9 +83,9 @@ endmodule
 				},
 			},
 			want: `module route (
-    input  I1_ZN,
-    output I0_I,
-    output MID
+    inout I0_I,
+    inout I1_ZN,
+    inout MID
 );
 
     assign I0_I = I1_ZN;
@@ -149,25 +99,56 @@ endmodule
 			moduleName: "route",
 			nl: &common.Netlist{
 				Nets: []*common.Net{
-					{Name: "net1", Driver: "I0.ZN", Pins: []common.RoutingPin{
+					{Name: "net1", Pins: []common.RoutingPin{
 						{Name: "I0.ZN"},
 						{Name: "I1.I"},
 					}},
-					{Name: "net2", Driver: "I1.ZN", Pins: []common.RoutingPin{
+					{Name: "net2", Pins: []common.RoutingPin{
 						{Name: "I1.ZN"},
 						{Name: "I2.I"},
 					}},
 				},
 			},
 			want: `module route (
-    input  I0_ZN,
-    input  I1_ZN,
-    output I1_I,
-    output I2_I
+    inout I0_ZN,
+    inout I1_I,
+    inout I1_ZN,
+    inout I2_I
 );
 
     assign I1_I = I0_ZN;
     assign I2_I = I1_ZN;
+
+endmodule
+`,
+		},
+		{
+			// Bus indices <N> must be rewritten to _N for valid Verilog identifiers.
+			name:       "bus indices rewritten to underscores",
+			moduleName: "route",
+			nl: &common.Netlist{
+				Nets: []*common.Net{
+					{Name: "net1", Pins: []common.RoutingPin{
+						{Name: "I0.s<0>"},
+						{Name: "I1.a<0>"},
+					}},
+					{Name: "WIDTH<0>", Pins: []common.RoutingPin{
+						{Name: "I2.width<0>"},
+					}},
+				},
+				Pins: []*common.RoutingPin{
+					{Name: "WIDTH<0>"},
+				},
+			},
+			want: `module route (
+    inout I0_s_0,
+    inout I1_a_0,
+    inout I2_width_0,
+    inout WIDTH_0
+);
+
+    assign I1_a_0 = I0_s_0;
+    assign WIDTH_0 = I2_width_0;
 
 endmodule
 `,
@@ -184,22 +165,12 @@ endmodule
 	}
 }
 
-// TestWriteVerilog_InvChain is an end-to-end test: load real layout+schematic,
-// build a Netlist, then verify the Verilog output.
+// TestWriteVerilog_InvChain is an end-to-end test using real layout+schematic.
+// All ports are inout; first pin in each net drives the rest.
 //
-// Topology: I1.VOUT (output) drives I0.VIN (input) via net1.
-// VDD/VSS are ignored (no output driver on those nets yet).
-//
-// Expected module:
-//
-//	module inv_chain (
-//	    input  I1_VOUT,
-//	    output I0_VIN
-//	);
-//
-//	    assign I0_VIN = I1_VOUT;
-//
-//	endmodule
+// net1:  I1.VOUT (first) → I0.VIN      →  assign I0_VIN = I1_VOUT
+// VIN:   I1.VIN  (first) → VIN (port)  →  assign VIN    = I1_VIN
+// VOUT:  I0.VOUT (first) → VOUT (port) →  assign VOUT   = I0_VOUT
 func TestWriteVerilog_InvChain(t *testing.T) {
 	layout, schem, err := netlist.LoadFiles(
 		"../../netlist/testdata/inv2_terminal_layout.json",
@@ -209,28 +180,23 @@ func TestWriteVerilog_InvChain(t *testing.T) {
 		t.Fatalf("load files: %v", err)
 	}
 
-	db := &emptyDB{}
-	nl, err := netlist.BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil, true)
+	nl, err := netlist.BuildNetsFromData(layout, schem, &emptyDB{}, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("build nets: %v", err)
 	}
 
 	got := writeVerilog("inv_chain", nl)
-	// With includePortNets=true:
-	//   net1:  I1.VOUT (driver) → I0.VIN        →  assign I0_VIN = I1_VOUT
-	//   VIN:   "VIN" (top-level input port)  → I1.VIN  →  assign I1_VIN = VIN
-	//   VOUT:  I0.VOUT (driver, only inst pin) → VOUT (port) →  assign VOUT = I0_VOUT
 	want := `module inv_chain (
-    input  I0_VOUT,
-    input  I1_VOUT,
-    input  VIN,
-    output I0_VIN,
-    output I1_VIN,
-    output VOUT
+    inout I0_VIN,
+    inout I0_VOUT,
+    inout I1_VIN,
+    inout I1_VOUT,
+    inout VIN,
+    inout VOUT
 );
 
     assign I0_VIN = I1_VOUT;
-    assign I1_VIN = VIN;
+    assign VIN = I1_VIN;
     assign VOUT = I0_VOUT;
 
 endmodule

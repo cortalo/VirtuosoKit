@@ -265,10 +265,9 @@ type RoutingPin struct {
 }
 
 type Net struct {
-	ID     int
-	Name   string
-	Pins   []RoutingPin
-	Driver string
+	ID   int
+	Name string
+	Pins []RoutingPin
 }
 
 // Netlist holds everything the router needs: the internal nets to route and

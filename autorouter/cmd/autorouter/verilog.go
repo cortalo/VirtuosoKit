@@ -8,8 +8,7 @@ import (
 )
 
 func writeVerilog(moduleName string, nl *common.Netlist) string {
-	inputs := map[string]struct{}{}
-	outputs := map[string]struct{}{}
+	ports := map[string]struct{}{}
 	var assigns []string
 
 	portNames := make(map[string]struct{}, len(nl.Pins))
@@ -18,57 +17,43 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 	}
 
 	for _, net := range nl.Nets {
-		if net.Driver == "" {
+		// Collect all identifiers for this net: instance pins first, then top-level port name.
+		var idents []string
+		for _, pin := range net.Pins {
+			if pin.Name != "" {
+				idents = append(idents, toPortName(pin.Name))
+			}
+		}
+		if _, isPort := portNames[net.Name]; isPort {
+			idents = append(idents, toPortName(net.Name))
+		}
+		if len(idents) < 2 {
 			continue
 		}
-		drv := toPortName(net.Driver)
-		inputs[drv] = struct{}{}
-
-		var sinks []string
-		for _, pin := range net.Pins {
-			if pin.Name == "" || pin.Name == net.Driver {
-				continue
-			}
-			sinks = append(sinks, toPortName(pin.Name))
-		}
-		// If the net is a top-level port driven by an inst.pin, add the port name
-		// as an output sink (covers both: sole-pin case like VOUT, and internal
-		// nets also exposed as ports like MID).
-		_, isPort := portNames[net.Name]
-		if isPort && strings.Contains(net.Driver, ".") {
-			sinks = append(sinks, toPortName(net.Name))
-		}
-		for _, sink := range sinks {
-			outputs[sink] = struct{}{}
+		drv := idents[0]
+		ports[drv] = struct{}{}
+		for _, sink := range idents[1:] {
+			ports[sink] = struct{}{}
 			assigns = append(assigns, fmt.Sprintf("    assign %s = %s;", sink, drv))
 		}
 	}
 
-	sortedInputs := sortedKeys(inputs)
-	sortedOutputs := sortedKeys(outputs)
+	sortedPorts := sortedKeys(ports)
 	sort.Strings(assigns)
 
 	var b strings.Builder
-	totalPorts := len(sortedInputs) + len(sortedOutputs)
 
-	if totalPorts == 0 {
+	if len(sortedPorts) == 0 {
 		b.WriteString(fmt.Sprintf("module %s ();\nendmodule\n", moduleName))
 		return b.String()
 	}
 
 	b.WriteString(fmt.Sprintf("module %s (\n", moduleName))
-	all := make([]struct{ dir, name string }, 0, totalPorts)
-	for _, n := range sortedInputs {
-		all = append(all, struct{ dir, name string }{"input", n})
-	}
-	for _, n := range sortedOutputs {
-		all = append(all, struct{ dir, name string }{"output", n})
-	}
-	for i, p := range all {
-		if i < totalPorts-1 {
-			b.WriteString(fmt.Sprintf("    %-6s %s,\n", p.dir, p.name))
+	for i, p := range sortedPorts {
+		if i < len(sortedPorts)-1 {
+			b.WriteString(fmt.Sprintf("    inout %s,\n", p))
 		} else {
-			b.WriteString(fmt.Sprintf("    %-6s %s\n", p.dir, p.name))
+			b.WriteString(fmt.Sprintf("    inout %s\n", p))
 		}
 	}
 	b.WriteString(");\n")
