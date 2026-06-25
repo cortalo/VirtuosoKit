@@ -36,7 +36,7 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 		// nets also exposed as ports like MID).
 		_, isPort := portNames[net.Name]
 		if isPort && strings.Contains(net.Driver, ".") {
-			sinks = append(sinks, net.Name)
+			sinks = append(sinks, toPortName(net.Name))
 		}
 		for _, sink := range sinks {
 			outputs[sink] = struct{}{}
@@ -84,8 +84,11 @@ func writeVerilog(moduleName string, nl *common.Netlist) string {
 	return b.String()
 }
 
-func toPortName(instPin string) string {
-	return strings.ReplaceAll(instPin, ".", "_")
+func toPortName(s string) string {
+	s = strings.ReplaceAll(s, ".", "_")
+	s = strings.ReplaceAll(s, "<", "_")
+	s = strings.ReplaceAll(s, ">", "")
+	return s
 }
 
 func sortedKeys(m map[string]struct{}) []string {

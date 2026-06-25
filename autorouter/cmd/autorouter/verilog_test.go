@@ -37,6 +37,40 @@ endmodule
 `,
 		},
 		{
+			// Bus indices <N> in driver, sink, and port-net names must be rewritten
+			// to _N so the output is legal Verilog (angle brackets are not valid identifiers).
+			name:       "bus indices rewritten to underscores",
+			moduleName: "route",
+			nl: &common.Netlist{
+				Nets: []*common.Net{
+					// driver and sink both carry bus notation in pin part
+					{Name: "net1", Driver: "I0.s<0>", Pins: []common.RoutingPin{
+						{Name: "I0.s<0>"},
+						{Name: "I1.a<0>"},
+					}},
+					// net name itself is a bus bit and is a top-level port
+					{Name: "WIDTH<0>", Driver: "I2.width<0>", Pins: []common.RoutingPin{
+						{Name: "I2.width<0>"},
+					}},
+				},
+				Pins: []*common.RoutingPin{
+					{Name: "WIDTH<0>"},
+				},
+			},
+			want: `module route (
+    input  I0_s_0,
+    input  I2_width_0,
+    output I1_a_0,
+    output WIDTH_0
+);
+
+    assign I1_a_0 = I0_s_0;
+    assign WIDTH_0 = I2_width_0;
+
+endmodule
+`,
+		},
+		{
 			name:       "single net one sink",
 			moduleName: "route",
 			nl: &common.Netlist{
