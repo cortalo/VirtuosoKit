@@ -18,8 +18,8 @@ type Canvas interface {
 	IsOccupied(seg Segment) bool
 	GetLowerLeft() Point
 	GetUpperRight() Point
-	GetTrackWidth(layer common.Layer) int
-	NewTrack(layer common.Layer, trackID, start, end, netID int) (TrackSegment, error)
+	GetTrackWidth(layer common.Layer) common.Nm
+	NewTrack(layer common.Layer, trackID, netID int, start, end common.Nm) (TrackSegment, error)
 	NewSeg(layer common.Layer, ll, ur Point, netID int) (Segment, error)
 }
 
@@ -27,13 +27,13 @@ type DRCSpec = common.DRCSpec
 
 type TwoLayerRouter struct {
 	canvas          Canvas
-	m2Width         int
+	m2Width         common.Nm
 	m2DRC           DRCSpec
 	m3DRC           DRCSpec
 	widenNarrowPins bool
 }
 
-func NewTwoLayerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *TwoLayerRouter {
+func NewTwoLayerRouter(c Canvas, m2Width common.Nm, m2DRC, m3DRC DRCSpec) *TwoLayerRouter {
 	return &TwoLayerRouter{canvas: c, m2Width: m2Width, m2DRC: m2DRC, m3DRC: m3DRC}
 }
 
@@ -74,17 +74,17 @@ func (r *TwoLayerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) 
 		}
 	}
 
-	sumY := 0
+	var sumY common.Nm
 	for _, pin := range pins {
 		sumY += pin.YLow
 	}
-	midY := sumY / len(pins)
+	midY := sumY / common.Nm(len(pins))
 
 	lowerLeft := r.canvas.GetLowerLeft()
 	upperRight := r.canvas.GetUpperRight()
 	tw := r.canvas.GetTrackWidth(common.M3)
-	midTrack := (midY - lowerLeft.Y) / tw
-	maxTrack := (upperRight.Y-lowerLeft.Y)/tw - 1
+	midTrack := int((midY - lowerLeft.Y) / tw)
+	maxTrack := int((upperRight.Y-lowerLeft.Y)/tw) - 1
 
 	tryAndProcess := func(trackID int) ([]Segment, bool) {
 		segs, ok := r.tryTrack(pins, netID, trackID)
@@ -127,11 +127,11 @@ func (r *TwoLayerRouter) m3Passible(ts TrackSegment) bool {
 }
 
 func (r *TwoLayerRouter) tryTrack(pins []RoutingPin, netID, trackID int) ([]Segment, bool) {
-	minX := lo.Min(lo.Map(pins, func(p RoutingPin, _ int) int { return p.XLow }))
-	maxXRight := lo.Max(lo.Map(pins, func(p RoutingPin, _ int) int { return max(p.XHigh, p.XLow+r.m2Width) }))
+	minX := lo.Min(lo.Map(pins, func(p RoutingPin, _ int) common.Nm { return p.XLow }))
+	maxXRight := lo.Max(lo.Map(pins, func(p RoutingPin, _ int) common.Nm { return max(p.XHigh, p.XLow+r.m2Width) }))
 
 	m3Lo, m3Hi := r.m3DRC.ApplyEndExtension(minX, maxXRight)
-	m3, err := r.canvas.NewTrack(common.M3, trackID, m3Lo, m3Hi, netID)
+	m3, err := r.canvas.NewTrack(common.M3, trackID, netID, m3Lo, m3Hi)
 	if err != nil {
 		return nil, false
 	}
@@ -210,7 +210,7 @@ type m2Group struct {
 
 func (g m2Group) needsFiller() bool { return len(g.stubs) > 1 }
 
-func (g m2Group) xSpan() (xLo, xHi int) {
+func (g m2Group) xSpan() (xLo, xHi common.Nm) {
 	return g.stubs[0].LowerLeft.X, g.stubs[len(g.stubs)-1].UpperRight.X
 }
 
@@ -226,7 +226,7 @@ func (g m2Group) markNoViaUp() {
 // filler creates an M2 bar spanning the group's X range at the M3 track Y level,
 // to be used as the single via contact point to M3. NoViaDown is set so the filler
 // does not attempt a via back down to M1.
-func (g m2Group) filler(c Canvas, m2DRC DRCSpec, m3YLo, m3YHi, netID int) (Segment, error) {
+func (g m2Group) filler(c Canvas, m2DRC DRCSpec, m3YLo, m3YHi common.Nm, netID int) (Segment, error) {
 	xLo, xHi := g.xSpan()
 	m3YLo, m3YHi = m2DRC.ApplyEndExtension(m3YLo, m3YHi)
 	seg, err := c.NewSeg(common.M2, Point{X: xLo, Y: m3YLo}, Point{X: xHi, Y: m3YHi}, netID)
@@ -240,7 +240,7 @@ func (g m2Group) filler(c Canvas, m2DRC DRCSpec, m3YLo, m3YHi, netID int) (Segme
 // groupByProximity partitions m2Stubs into groups where consecutive stubs
 // (sorted by X) have a gap smaller than minSpace. Stubs within a group are
 // too close to carry independent vias to M3 and will share a filler bar.
-func groupByProximity(m2Stubs []Segment, minSpace int) []m2Group {
+func groupByProximity(m2Stubs []Segment, minSpace common.Nm) []m2Group {
 	if len(m2Stubs) == 0 {
 		return nil
 	}
@@ -271,7 +271,7 @@ func groupByProximity(m2Stubs []Segment, minSpace int) []m2Group {
 // pinM2Bounds returns the raw (before end-extension) Y range for the M2 stub
 // connecting pin to m3, and errPinTooNarrow if pin.XHigh-pin.XLow < m2Width
 // (caller should not attempt to slide the stub in that case).
-func (r *TwoLayerRouter) pinM2Bounds(pin RoutingPin, m3 TrackSegment) (lo, hi int, err error) {
+func (r *TwoLayerRouter) pinM2Bounds(pin RoutingPin, m3 TrackSegment) (lo, hi common.Nm, err error) {
 	if pin.XHigh-pin.XLow < r.m2Width {
 		err = errPinTooNarrow
 	}

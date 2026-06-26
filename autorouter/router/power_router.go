@@ -7,13 +7,13 @@ import "autorouter/common"
 // and all M3 tracks are tied together by the vertical M2 bus.
 type PowerRouter struct {
 	canvas          Canvas
-	m2Width         int
+	m2Width         common.Nm
 	m2DRC           DRCSpec
 	m3DRC           DRCSpec
 	widenNarrowPins bool
 }
 
-func NewPowerRouter(c Canvas, m2Width int, m2DRC, m3DRC DRCSpec) *PowerRouter {
+func NewPowerRouter(c Canvas, m2Width common.Nm, m2DRC, m3DRC DRCSpec) *PowerRouter {
 	return &PowerRouter{
 		canvas:  c,
 		m2Width: m2Width,
@@ -53,13 +53,13 @@ func (r *PowerRouter) Route(pins []RoutingPin, netID int) ([]Segment, error) {
 	origin := r.canvas.GetLowerLeft()
 	upperRight := r.canvas.GetUpperRight()
 	m3tw := r.canvas.GetTrackWidth(common.M3)
-	maxTrack := (upperRight.Y-origin.Y)/m3tw - 1
+	maxTrack := int((upperRight.Y-origin.Y)/m3tw) - 1
 
 	m2Stubs := make([]Segment, len(pins))
 	m3Segs := make([]Segment, len(pins))
 
 	for i, pin := range pins {
-		midTrack := (pin.YLow - origin.Y) / m3tw
+		midTrack := int((pin.YLow - origin.Y) / m3tw)
 		found := false
 		for delta := 0; (midTrack+delta <= maxTrack) || (midTrack-delta >= 0); delta++ {
 			if m3, m2, ok := r.tryPinTrack(pin, netID, midTrack+delta); ok {
@@ -112,7 +112,7 @@ func (r *PowerRouter) tryPinTrack(pin RoutingPin, netID, trackID int) (m3Seg Seg
 
 	// M3 spans from left edge (to meet M2 bus) to the right edge of the pin.
 	m3Start, m3End := r.m3DRC.ApplyEndExtension(origin.X, pin.XLow+r.m2Width)
-	m3, err := r.canvas.NewTrack(common.M3, trackID, m3Start, m3End, netID)
+	m3, err := r.canvas.NewTrack(common.M3, trackID, netID, m3Start, m3End)
 	if err != nil {
 		return Segment{}, Segment{}, false
 	}

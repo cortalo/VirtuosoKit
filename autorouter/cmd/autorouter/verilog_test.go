@@ -209,6 +209,6 @@ endmodule
 // emptyDB satisfies netlist.PinDB with no entries, forcing terminal fallback.
 type emptyDB struct{}
 
-func (e *emptyDB) Query(lib, cell, pin string) (int, int, int, int, common.Layer, error) {
+func (e *emptyDB) Query(lib, cell, pin string) (common.Nm, common.Nm, common.Nm, common.Nm, common.Layer, error) {
 	return 0, 0, 0, 0, 0, common.ErrPinNotFound
 }

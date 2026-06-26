@@ -4,7 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 )
+
+// Nm represents a physical distance in nanometres.
+type Nm int
+
+// Micron represents a physical distance in micrometres.
+type Micron float64
+
+func (m Micron) ToNm() Nm     { return Nm(math.Round(float64(m) * 1000)) }
+func (n Nm) ToMicron() Micron { return Micron(float64(n) / 1000) }
 
 var (
 	ErrTrackMisaligned    = errors.New("segment is not aligned to track grid")
@@ -14,8 +24,8 @@ var (
 )
 
 type Point struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+	X Nm `json:"x"`
+	Y Nm `json:"y"`
 }
 
 type Layer int
@@ -157,10 +167,10 @@ func (p *Purpose) UnmarshalJSON(b []byte) error {
 // All dimensions are in nm.
 type ViaConfig struct {
 	ViaDef string // via definition name passed to the layout tool (e.g. "M3_M2")
-	CutW   int    // cut width
-	CutH   int    // cut height
-	SpaceX int    // cut-to-cut spacing in X
-	SpaceY int    // cut-to-cut spacing in Y
+	CutW   Nm     // cut width
+	CutH   Nm     // cut height
+	SpaceX Nm     // cut-to-cut spacing in X
+	SpaceY Nm     // cut-to-cut spacing in Y
 }
 
 type Shape struct {
@@ -198,7 +208,7 @@ func (seg Segment) ToShape() Shape {
 }
 
 func (s Segment) GetArea() int {
-	return (s.UpperRight.X - s.LowerLeft.X) * (s.UpperRight.Y - s.LowerLeft.Y)
+	return int(s.UpperRight.X-s.LowerLeft.X) * int(s.UpperRight.Y-s.LowerLeft.Y)
 }
 
 func (s Segment) Overlap(other Segment) bool {
@@ -208,12 +218,12 @@ func (s Segment) Overlap(other Segment) bool {
 
 type TrackSegment struct {
 	TrackID      int       `json:"track_id"`
-	Start        int       `json:"start"`
-	End          int       `json:"end"`
+	Start        Nm        `json:"start"`
+	End          Nm        `json:"end"`
 	NetID        int       `json:"net_id"`
 	Layer        Layer     `json:"-"`
 	CanvasOrigin Point     `json:"-"`
-	Width        int       `json:"-"`
+	Width        Nm        `json:"-"`
 	NumTracks    int       `json:"-"`
 	Dir          Direction `json:"-"`
 }
@@ -233,20 +243,20 @@ func (ts TrackSegment) NextTrack() TrackSegment {
 
 // GetLower returns the lower perpendicular coordinate of the track
 // (Y for horizontal tracks, X for vertical tracks).
-func (ts TrackSegment) GetLower() int {
+func (ts TrackSegment) GetLower() Nm {
 	switch ts.Dir {
 	case Horizontal:
-		return ts.CanvasOrigin.Y + ts.TrackID*ts.Width
+		return ts.CanvasOrigin.Y + Nm(ts.TrackID)*ts.Width
 	case Vertical:
-		return ts.CanvasOrigin.X + ts.TrackID*ts.Width
+		return ts.CanvasOrigin.X + Nm(ts.TrackID)*ts.Width
 	default:
 		panic(ErrUnknownDirection)
 	}
 }
 
-func (ts TrackSegment) GetUpper() int { return ts.GetLower() + ts.Width }
+func (ts TrackSegment) GetUpper() Nm { return ts.GetLower() + ts.Width }
 
-func (ts TrackSegment) GetArea() int { return (ts.End - ts.Start) * ts.Width }
+func (ts TrackSegment) GetArea() int { return int(ts.End-ts.Start) * int(ts.Width) }
 
 // RoutingPin is a physical pin access point from the router's perspective.
 // XLow/YLow is the bottom-left corner of the pin bbox; XHigh/YHigh is the top-right.
@@ -256,11 +266,11 @@ func (ts TrackSegment) GetArea() int { return (ts.End - ts.Start) * ts.Width }
 // m2DRC.MinPinOverlap() nm instead of covering the full pin height.
 type RoutingPin struct {
 	Name       string
-	Layer      Layer // pin metal layer; zero value treated as M1
-	XLow       int
-	XHigh      int
-	YLow       int
-	YHigh      int
+	Layer      Layer
+	XLow       Nm
+	XHigh      Nm
+	YLow       Nm
+	YHigh      Nm
 	MinOverlap bool
 }
 
@@ -280,36 +290,36 @@ type Netlist struct {
 
 type DRCSpec interface {
 	SatisfiesMinArea(seg Segment) bool
-	ApplyEndExtension(lo, hi int) (int, int)
-	ViaEnclosure() int
+	ApplyEndExtension(lo, hi Nm) (Nm, Nm)
+	ViaEnclosure() Nm
 	// ViaTrackSpacing returns the minimum number of tracks that must separate
 	// two M2 tracks that each carry a via to M3, to satisfy via spacing DRC.
 	// Default is 1 (one empty track between any two via-bearing M2 tracks).
 	ViaTrackSpacing() int
 	// ApplyMinSpaceExtension extends [lo, hi] by the min_space rule in both
 	// directions, returning the spacing-check range. No-op when min_space=0.
-	ApplyMinSpaceExtension(lo, hi int) (int, int)
+	ApplyMinSpaceExtension(lo, hi Nm) (Nm, Nm)
 	// MinPinOverlap returns the minimum nm M2 must extend into the pin bbox
 	// when routing in min-overlap mode. Zero means full-overlap (default).
-	MinPinOverlap() int
+	MinPinOverlap() Nm
 }
 
 // NoDRC is a DRCSpec with no constraints, used when DRC rules are not configured.
 type NoDRC struct{}
 
-func (NoDRC) SatisfiesMinArea(_ Segment) bool              { return true }
-func (NoDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo, hi }
-func (NoDRC) ViaEnclosure() int                            { return 0 }
-func (NoDRC) ViaTrackSpacing() int                         { return 1 }
-func (NoDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
-func (NoDRC) MinPinOverlap() int                           { return 0 }
+func (NoDRC) SatisfiesMinArea(_ Segment) bool           { return true }
+func (NoDRC) ApplyEndExtension(lo, hi Nm) (Nm, Nm)      { return lo, hi }
+func (NoDRC) ViaEnclosure() Nm                          { return 0 }
+func (NoDRC) ViaTrackSpacing() int                      { return 1 }
+func (NoDRC) ApplyMinSpaceExtension(lo, hi Nm) (Nm, Nm) { return lo, hi }
+func (NoDRC) MinPinOverlap() Nm                         { return 0 }
 
 // ToTrack converts a Segment to a TrackSegment using seg.Dir and seg.CanvasOrigin.
 // Horizontal: TrackID from Y, Start/End are X coordinates.
 // Vertical:   TrackID from X, Start/End are Y coordinates.
 // Returns ErrTrackMisaligned if the segment is not on the track grid.
-func (seg Segment) ToTrack(tw int) (TrackSegment, error) {
-	var offset, start, end, segWidth int
+func (seg Segment) ToTrack(tw Nm) (TrackSegment, error) {
+	var offset, start, end, segWidth Nm
 	switch seg.Dir {
 	case Horizontal:
 		offset = seg.LowerLeft.Y - seg.CanvasOrigin.Y
@@ -329,7 +339,7 @@ func (seg Segment) ToTrack(tw int) (TrackSegment, error) {
 		return TrackSegment{}, ErrTrackWidthMismatch
 	}
 	return TrackSegment{
-		TrackID:      offset / tw,
+		TrackID:      int(offset / tw),
 		Start:        start,
 		End:          end,
 		NetID:        seg.NetID,
@@ -347,11 +357,11 @@ func (ts TrackSegment) ToSeg() Segment {
 	var ll, ur Point
 	switch ts.Dir {
 	case Horizontal:
-		yLow := ts.CanvasOrigin.Y + ts.TrackID*ts.Width
+		yLow := ts.CanvasOrigin.Y + Nm(ts.TrackID)*ts.Width
 		ll = Point{X: ts.Start, Y: yLow}
 		ur = Point{X: ts.End, Y: yLow + ts.Width}
 	case Vertical:
-		xLow := ts.CanvasOrigin.X + ts.TrackID*ts.Width
+		xLow := ts.CanvasOrigin.X + Nm(ts.TrackID)*ts.Width
 		ll = Point{X: xLow, Y: ts.Start}
 		ur = Point{X: xLow + ts.Width, Y: ts.End}
 	case UnknownDirection:

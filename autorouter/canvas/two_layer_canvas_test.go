@@ -17,16 +17,16 @@ func newCanvas() *TwoLayerCanvas {
 	}
 }
 
-func mkSeg(x1, y1, x2, y2, netID int) Segment {
+func mkSeg(x1, y1, x2, y2 Nm, netID int) Segment {
 	return Segment{LowerLeft: Point{x1, y1}, UpperRight: Point{x2, y2}, NetID: netID, Layer: common.M2}
 }
 
 // mkM3Seg builds a factory-compatible M3 Segment (Dir and CanvasOrigin set)
 // for the test canvas (LowerLeft={0,0}, trackWidth=100).
-func mkM3Seg(trackID, start, end, netID int) Segment {
+func mkM3Seg(trackID int, start, end Nm, netID int) Segment {
 	return Segment{
-		LowerLeft:    Point{start, trackID * 100},
-		UpperRight:   Point{end, (trackID + 1) * 100},
+		LowerLeft:    Point{start, Nm(trackID) * 100},
+		UpperRight:   Point{end, Nm(trackID+1) * 100},
 		Layer:        common.M3,
 		NetID:        netID,
 		CanvasOrigin: Point{0, 0},
@@ -164,5 +164,5 @@ func TestCanvas_OccupyM3_Overlap_DifferentNet_ReturnsError(t *testing.T) {
 
 func TestCanvas_GetM3TrackWidth_ReturnsCorrectWidth(t *testing.T) {
 	c := newCanvas()
-	assert.Equal(t, 100, c.GetTrackWidth(common.M3))
+	assert.Equal(t, Nm(100), c.GetTrackWidth(common.M3))
 }

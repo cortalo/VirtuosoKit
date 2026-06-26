@@ -12,11 +12,13 @@ import (
 
 func newCanvas(width, height, trackWidth int) *canvas.TwoLayerCanvas {
 	trackCount := height / trackWidth
+	ll := common.Point{X: 0, Y: 0}
+	ur := common.Point{X: common.Nm(width), Y: common.Nm(height)}
 	return &canvas.TwoLayerCanvas{
-		LowerLeft:  common.Point{X: 0, Y: 0},
-		UpperRight: common.Point{X: width, Y: height},
-		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: width, Y: height}),
-		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, trackWidth),
+		LowerLeft:  ll,
+		UpperRight: ur,
+		M2Storage:  canvas.NewSegmentStore(ll, ur),
+		M3Storage:  canvas.NewTrackSegmentStorage(trackCount, common.Nm(trackWidth)),
 	}
 }
 
@@ -26,17 +28,19 @@ func newRouter(c *canvas.TwoLayerCanvas) *router.TwoLayerRouter {
 
 type m3MinAreaDRC struct{ area int }
 
-func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool     { return seg.GetArea() >= d.area }
-func (d m3MinAreaDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo, hi }
-func (d m3MinAreaDRC) ViaEnclosure() int                            { return 0 }
-func (d m3MinAreaDRC) ViaTrackSpacing() int                         { return 1 }
-func (d m3MinAreaDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
-func (d m3MinAreaDRC) MinPinOverlap() int                           { return 0 }
+func (d m3MinAreaDRC) SatisfiesMinArea(seg common.Segment) bool                  { return seg.GetArea() >= d.area }
+func (d m3MinAreaDRC) ApplyEndExtension(lo, hi common.Nm) (common.Nm, common.Nm) { return lo, hi }
+func (d m3MinAreaDRC) ViaEnclosure() common.Nm                                   { return 0 }
+func (d m3MinAreaDRC) ViaTrackSpacing() int                                      { return 1 }
+func (d m3MinAreaDRC) ApplyMinSpaceExtension(lo, hi common.Nm) (common.Nm, common.Nm) {
+	return lo, hi
+}
+func (d m3MinAreaDRC) MinPinOverlap() common.Nm { return 0 }
 
 func pins(coords ...[2]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))
 	for i, c := range coords {
-		ps[i] = common.RoutingPin{XLow: c[0], YLow: c[1]}
+		ps[i] = common.RoutingPin{XLow: common.Nm(c[0]), YLow: common.Nm(c[1])}
 	}
 	return ps
 }
@@ -46,17 +50,17 @@ func pins(coords ...[2]int) []common.RoutingPin {
 func m3Track(segs []common.Segment, tw int) int {
 	for _, s := range segs {
 		if s.Layer == common.M3 {
-			return s.LowerLeft.Y / tw
+			return int(s.LowerLeft.Y / common.Nm(tw))
 		}
 	}
 	return -1
 }
 
 // occupyM3Track marks a single M3 track on the canvas as occupied.
-func occupyM3Track(c *canvas.TwoLayerCanvas, trackID, start, end, netID, tw int) error {
+func occupyM3Track(c *canvas.TwoLayerCanvas, trackID, netID, tw int, start, end common.Nm) error {
 	return c.Occupy(common.Segment{
-		LowerLeft:    common.Point{X: start, Y: trackID * tw},
-		UpperRight:   common.Point{X: end, Y: (trackID + 1) * tw},
+		LowerLeft:    common.Point{X: start, Y: common.Nm(trackID * tw)},
+		UpperRight:   common.Point{X: end, Y: common.Nm((trackID + 1) * tw)},
 		NetID:        netID,
 		Layer:        common.M3,
 		CanvasOrigin: common.Point{X: 0, Y: 0},
@@ -104,7 +108,7 @@ func TestRoute_OutOfBounds_ReturnsError(t *testing.T) {
 
 func TestRoute_MidTrackM3Blocked_FallsBackToNeighbor(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
-	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 99, 100))
+	require.NoError(t, occupyM3Track(c, 5, 99, 100, 0, 1000))
 	r := newRouter(c)
 
 	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
@@ -150,7 +154,7 @@ func TestRoute_M2ToBlocked_SkipsTrack(t *testing.T) {
 func TestRoute_AllTracksBlocked_ReturnsError(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	for i := 0; i < 10; i++ {
-		require.NoError(t, occupyM3Track(c, i, 0, 1000, 99, 100))
+		require.NoError(t, occupyM3Track(c, i, 99, 100, 0, 1000))
 	}
 	r := newRouter(c)
 
@@ -161,7 +165,7 @@ func TestRoute_AllTracksBlocked_ReturnsError(t *testing.T) {
 
 func TestRoute_SameNetID_IgnoresOwnBlocks(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
-	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 1, 100))
+	require.NoError(t, occupyM3Track(c, 5, 1, 100, 0, 1000))
 	r := newRouter(c)
 
 	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
@@ -176,8 +180,8 @@ func TestRoute_MidTrackBlocked_ExpandsSymmetrically(t *testing.T) {
 	c := newCanvas(1000, 1000, 100)
 	// block tracks 5 and 6; spacing rule means 4 is also excluded (adjacent to 5)
 	// and 7 is excluded (adjacent to 6), so the first valid track is 3
-	require.NoError(t, occupyM3Track(c, 5, 0, 1000, 99, 100))
-	require.NoError(t, occupyM3Track(c, 6, 0, 1000, 99, 100))
+	require.NoError(t, occupyM3Track(c, 5, 99, 100, 0, 1000))
+	require.NoError(t, occupyM3Track(c, 6, 99, 100, 0, 1000))
 	r := newRouter(c)
 
 	segs, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 1)
@@ -197,7 +201,7 @@ func TestRoute_MultipleNets_DoNotConflict(t *testing.T) {
 	trackID1 := m3Track(segs1, 100)
 
 	// mark net1 as occupied
-	require.NoError(t, occupyM3Track(c, trackID1, 100, 900, 1, 100))
+	require.NoError(t, occupyM3Track(c, trackID1, 1, 100, 100, 900))
 
 	// route net2 with same endpoints, should find different track
 	segs2, err := r.Route(pins([2]int{100, 100}, [2]int{900, 900}), 2)
@@ -230,17 +234,17 @@ func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
 	require.Len(t, segs, 3, "2 per-pin stubs + 1 m2Horiz")
 
 	for i := 0; i < 2; i++ {
-		assert.Equal(t, 100, segs[i].LowerLeft.X, "stub[%d] XLow", i)
-		assert.Equal(t, 101, segs[i].UpperRight.X, "stub[%d] XHigh", i)
-		assert.Equal(t, 400, segs[i].LowerLeft.Y, "stub[%d] YLow", i)
-		assert.Equal(t, 500, segs[i].UpperRight.Y, "stub[%d] YHigh", i)
+		assert.Equal(t, common.Nm(100), segs[i].LowerLeft.X, "stub[%d] XLow", i)
+		assert.Equal(t, common.Nm(101), segs[i].UpperRight.X, "stub[%d] XHigh", i)
+		assert.Equal(t, common.Nm(400), segs[i].LowerLeft.Y, "stub[%d] YLow", i)
+		assert.Equal(t, common.Nm(500), segs[i].UpperRight.Y, "stub[%d] YHigh", i)
 	}
 
 	m2Horiz := segs[2]
-	assert.Equal(t, 100, m2Horiz.LowerLeft.X)
-	assert.Equal(t, 101, m2Horiz.UpperRight.X)
-	assert.Equal(t, 400, m2Horiz.LowerLeft.Y)
-	assert.Equal(t, 500, m2Horiz.UpperRight.Y)
+	assert.Equal(t, common.Nm(100), m2Horiz.LowerLeft.X)
+	assert.Equal(t, common.Nm(101), m2Horiz.UpperRight.X)
+	assert.Equal(t, common.Nm(400), m2Horiz.LowerLeft.Y)
+	assert.Equal(t, common.Nm(500), m2Horiz.UpperRight.Y)
 }
 
 // --- min pin overlap ---
@@ -248,10 +252,10 @@ func TestRoute_SameXPins_M3AreaTooSmall_FallsBackToM2Only(t *testing.T) {
 // minPinOverlapDRC is a NoDRC variant that only overrides MinPinOverlap.
 type minPinOverlapDRC struct {
 	common.NoDRC
-	overlap int
+	overlap common.Nm
 }
 
-func (d minPinOverlapDRC) MinPinOverlap() int { return d.overlap }
+func (d minPinOverlapDRC) MinPinOverlap() common.Nm { return d.overlap }
 
 // Canvas 1000x1000, trackWidth=100. pin1 Y=[100,400], pin2 Y=[800,900].
 // midY=(100+800)/2=450 → track 4 (Y=[400,500]).
@@ -279,8 +283,8 @@ func TestRoute_MinPinOverlap_ShortensM2Bottom(t *testing.T) {
 			m2Left = s
 		}
 	}
-	assert.Equal(t, 250, m2Left.LowerLeft.Y, "min-overlap: M2 bottom = min(pin.YHigh,m3.GetUpper())-overlap")
-	assert.Equal(t, 500, m2Left.UpperRight.Y, "M2 top at m3.GetUpper()")
+	assert.Equal(t, common.Nm(250), m2Left.LowerLeft.Y, "min-overlap: M2 bottom = min(pin.YHigh,m3.GetUpper())-overlap")
+	assert.Equal(t, common.Nm(500), m2Left.UpperRight.Y, "M2 top at m3.GetUpper()")
 }
 
 // Canvas 1000x1000, trackWidth=100. Two pins at YLow=100 → midY=100 → track 1 (Y=[100,200]).
@@ -308,8 +312,8 @@ func TestRoute_MinPinOverlap_ShortensM2Top(t *testing.T) {
 			m2Left = s
 		}
 	}
-	assert.Equal(t, 100, m2Left.LowerLeft.Y, "M2 bottom at m3.GetLower()")
-	assert.Equal(t, 250, m2Left.UpperRight.Y, "min-overlap: M2 top = max(pin.YLow,m3.GetLower())+overlap")
+	assert.Equal(t, common.Nm(100), m2Left.LowerLeft.Y, "M2 bottom at m3.GetLower()")
+	assert.Equal(t, common.Nm(250), m2Left.UpperRight.Y, "min-overlap: M2 top = max(pin.YLow,m3.GetLower())+overlap")
 }
 
 // Bug: M2-only fallback (triggered when M3 area < minArea) rebuilds per-pin stubs from
@@ -343,7 +347,7 @@ func TestRoute_MinPinOverlap_M2OnlyFallback_RespectsMinOverlap(t *testing.T) {
 		}
 	}
 	// MinOverlap=true: M2 top should be m3.GetLower()+minOv = 100+150 = 250, not pin.YHigh = 400.
-	assert.Equal(t, 250, m2Left.UpperRight.Y, "min-overlap must shorten M2 in M2-only fallback")
+	assert.Equal(t, common.Nm(250), m2Left.UpperRight.Y, "min-overlap must shorten M2 in M2-only fallback")
 }
 
 // Bug: pinM2Bounds "above M3" branch (pinCenterY > m3CenterY) can return hi < m3.GetUpper(),
@@ -372,7 +376,7 @@ func TestRoute_MinPinOverlap_AboveM3_M2CoversFullTrack(t *testing.T) {
 		}
 	}
 	// M2 must cover the full M3 track: UpperRight.Y must be >= m3.GetUpper()=400.
-	assert.Equal(t, 400, m2Left.UpperRight.Y, "min-overlap M2 top must reach m3.GetUpper()")
+	assert.Equal(t, common.Nm(400), m2Left.UpperRight.Y, "min-overlap M2 top must reach m3.GetUpper()")
 }
 
 // With MinOverlap=false the full pin height is covered regardless of minPinOverlap.
@@ -394,8 +398,8 @@ func TestRoute_FullOverlap_IgnoresMinPinOverlapRule(t *testing.T) {
 			m2Left = s
 		}
 	}
-	assert.Equal(t, 100, m2Left.LowerLeft.Y, "full-overlap M2 bottom at pin.YLow")
-	assert.Equal(t, 500, m2Left.UpperRight.Y, "full-overlap M2 top at max(pin.YHigh, m3.GetUpper())")
+	assert.Equal(t, common.Nm(100), m2Left.LowerLeft.Y, "full-overlap M2 bottom at pin.YLow")
+	assert.Equal(t, common.Nm(500), m2Left.UpperRight.Y, "full-overlap M2 top at max(pin.YHigh, m3.GetUpper())")
 }
 
 // --- widen narrow pins ---
@@ -413,8 +417,8 @@ func TestRoute_WidenNarrowPins_Disabled_PinUnchanged(t *testing.T) {
 	segs, err := r.Route(ps, 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 460, ps[0].XLow, "pin must not be widened when flag is off")
-	assert.Equal(t, 540, ps[0].XHigh)
+	assert.Equal(t, common.Nm(460), ps[0].XLow, "pin must not be widened when flag is off")
+	assert.Equal(t, common.Nm(540), ps[0].XHigh)
 	for _, s := range segs {
 		assert.NotEqual(t, common.M1, s.Layer, "no M1 segment expected")
 	}
@@ -440,11 +444,11 @@ func TestRoute_WidenNarrowPins_NarrowPin_CenteredAndM1Appended(t *testing.T) {
 	require.NoError(t, err)
 
 	// pin widened in-place, centred on original centre=500
-	assert.Equal(t, 450, ps[0].XLow)
-	assert.Equal(t, 550, ps[0].XHigh)
+	assert.Equal(t, common.Nm(450), ps[0].XLow)
+	assert.Equal(t, common.Nm(550), ps[0].XHigh)
 	// wide pin untouched
-	assert.Equal(t, 400, ps[1].XLow)
-	assert.Equal(t, 600, ps[1].XHigh)
+	assert.Equal(t, common.Nm(400), ps[1].XLow)
+	assert.Equal(t, common.Nm(600), ps[1].XHigh)
 
 	// exactly one M1 segment appended, matching the widened pin bbox
 	var m1s []common.Segment
@@ -454,10 +458,10 @@ func TestRoute_WidenNarrowPins_NarrowPin_CenteredAndM1Appended(t *testing.T) {
 		}
 	}
 	require.Len(t, m1s, 1)
-	assert.Equal(t, 450, m1s[0].LowerLeft.X)
-	assert.Equal(t, 550, m1s[0].UpperRight.X)
-	assert.Equal(t, 100, m1s[0].LowerLeft.Y)
-	assert.Equal(t, 200, m1s[0].UpperRight.Y)
+	assert.Equal(t, common.Nm(450), m1s[0].LowerLeft.X)
+	assert.Equal(t, common.Nm(550), m1s[0].UpperRight.X)
+	assert.Equal(t, common.Nm(100), m1s[0].LowerLeft.Y)
+	assert.Equal(t, common.Nm(200), m1s[0].UpperRight.Y)
 }
 
 // TestRoute_WidenNarrowPins_AlreadyWide_NotModified: pin whose width already equals or
@@ -474,8 +478,8 @@ func TestRoute_WidenNarrowPins_AlreadyWide_NotModified(t *testing.T) {
 	segs, err := r.Route(ps, 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, 400, ps[0].XLow)
-	assert.Equal(t, 500, ps[0].XHigh)
+	assert.Equal(t, common.Nm(400), ps[0].XLow)
+	assert.Equal(t, common.Nm(500), ps[0].XHigh)
 	for _, s := range segs {
 		assert.NotEqual(t, common.M1, s.Layer)
 	}

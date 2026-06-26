@@ -3,7 +3,6 @@ package netlist
 import (
 	"autorouter/common"
 	"errors"
-	"math"
 	"strings"
 )
 
@@ -53,11 +52,11 @@ func PRBoundary(layout RawLayout) (lowerLeft, upperRight common.Point, err error
 	for _, s := range layout.Shapes {
 		if s.Layer == "prBoundary" {
 			return common.Point{
-					X: int(math.Round(s.BBox[0][0] * 1000)),
-					Y: int(math.Round(s.BBox[0][1] * 1000)),
+					X: common.Micron(s.BBox[0][0]).ToNm(),
+					Y: common.Micron(s.BBox[0][1]).ToNm(),
 				}, common.Point{
-					X: int(math.Round(s.BBox[1][0] * 1000)),
-					Y: int(math.Round(s.BBox[1][1] * 1000)),
+					X: common.Micron(s.BBox[1][0]).ToNm(),
+					Y: common.Micron(s.BBox[1][1]).ToNm(),
 				}, nil
 		}
 	}
@@ -72,7 +71,7 @@ func parseOrient(s string) string {
 }
 
 // transformPin applies an orientation transform to a pin bbox relative to the cell origin.
-func transformPin(xLow, xHigh, yLow, yHigh int, orient string) (int, int, int, int) {
+func transformPin(xLow, xHigh, yLow, yHigh common.Nm, orient string) (common.Nm, common.Nm, common.Nm, common.Nm) {
 	switch orient {
 	case "R90":
 		return -yHigh, -yLow, xLow, xHigh

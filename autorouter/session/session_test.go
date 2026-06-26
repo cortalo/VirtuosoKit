@@ -44,8 +44,8 @@ func makeNet(id, fx, fy, tx, ty int) *Net {
 	return &Net{
 		ID: id,
 		Pins: []RoutingPin{
-			{XLow: fx, YLow: fy, YHigh: fy},
-			{XLow: tx, YLow: ty, YHigh: ty},
+			{XLow: common.Nm(fx), YLow: common.Nm(fy), YHigh: common.Nm(fy)},
+			{XLow: common.Nm(tx), YLow: common.Nm(ty), YHigh: common.Nm(ty)},
 		},
 	}
 }
@@ -56,15 +56,15 @@ func netlist(nets ...*Net) *Netlist {
 
 // seg creates an M2 segment for use in mock router results.
 func seg(x0, y0, x1, y1, netID int) Segment {
-	return Segment{LowerLeft: Point{X: x0, Y: y0}, UpperRight: Point{X: x1, Y: y1}, NetID: netID, Layer: common.M2}
+	return Segment{LowerLeft: Point{X: common.Nm(x0), Y: common.Nm(y0)}, UpperRight: Point{X: common.Nm(x1), Y: common.Nm(y1)}, NetID: netID, Layer: common.M2}
 }
 
 // m3Seg creates an M3 segment from a track ID using the mock canvas geometry
 // (LowerLeft={0,0}, trackWidth=100).
 func m3Seg(trackID, start, end, netID int) Segment {
 	return Segment{
-		LowerLeft:  Point{X: start, Y: trackID * 100},
-		UpperRight: Point{X: end, Y: (trackID + 1) * 100},
+		LowerLeft:  Point{X: common.Nm(start), Y: common.Nm(trackID * 100)},
+		UpperRight: Point{X: common.Nm(end), Y: common.Nm((trackID + 1) * 100)},
 		Layer:      common.M3,
 		NetID:      netID,
 	}

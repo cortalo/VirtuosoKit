@@ -22,10 +22,10 @@ func newFTC() *FullTrackCanvas {
 
 // mkFTM2Seg builds a factory-compatible M2 Segment for the test FullTrackCanvas.
 // M2 is vertical: TrackID from X (width=10), Start/End are Y coordinates.
-func mkFTM2Seg(trackID, start, end, netID int) Segment {
+func mkFTM2Seg(trackID int, start, end Nm, netID int) Segment {
 	return Segment{
-		LowerLeft:    Point{trackID * 10, start},
-		UpperRight:   Point{(trackID + 1) * 10, end},
+		LowerLeft:    Point{Nm(trackID) * 10, start},
+		UpperRight:   Point{Nm(trackID+1) * 10, end},
 		Layer:        common.M2,
 		NetID:        netID,
 		CanvasOrigin: Point{0, 0},
@@ -140,12 +140,12 @@ func TestFTC_OccupyM3_OutOfRangeTrack_ReturnsError(t *testing.T) {
 
 func TestFTC_GetTrackWidth_M2(t *testing.T) {
 	c := newFTC()
-	assert.Equal(t, 10, c.GetTrackWidth(common.M2))
+	assert.Equal(t, Nm(10), c.GetTrackWidth(common.M2))
 }
 
 func TestFTC_GetTrackWidth_M3(t *testing.T) {
 	c := newFTC()
-	assert.Equal(t, 100, c.GetTrackWidth(common.M3))
+	assert.Equal(t, Nm(100), c.GetTrackWidth(common.M3))
 }
 
 // --- IsOccupied M2 ---
@@ -378,32 +378,32 @@ func TestNewFullTrackCanvas_M3Instance_TrackOccupied(t *testing.T) {
 
 func TestFTC_NewTrackM2_Basic(t *testing.T) {
 	c := newFTC()
-	ts, err := c.NewTrack(common.M2, 5, 200, 800, 1)
+	ts, err := c.NewTrack(common.M2, 5, 1, 200, 800)
 	require.NoError(t, err)
 	assert.Equal(t, 5, ts.TrackID)
-	assert.Equal(t, 10, ts.Width)
+	assert.Equal(t, Nm(10), ts.Width)
 	assert.Equal(t, common.Vertical, ts.Dir)
 	assert.Equal(t, 100, ts.NumTracks)
 }
 
 func TestFTC_NewTrackM2_OutOfRange_ReturnsError(t *testing.T) {
 	c := newFTC()
-	_, err := c.NewTrack(common.M2, 100, 0, 100, 1)
+	_, err := c.NewTrack(common.M2, 100, 1, 0, 100)
 	assert.ErrorIs(t, err, ErrInvalidTrackID)
 }
 
 func TestFTC_NewTrackM3_Basic(t *testing.T) {
 	c := newFTC()
-	ts, err := c.NewTrack(common.M3, 3, 0, 500, 1)
+	ts, err := c.NewTrack(common.M3, 3, 1, 0, 500)
 	require.NoError(t, err)
 	assert.Equal(t, 3, ts.TrackID)
-	assert.Equal(t, 100, ts.Width)
+	assert.Equal(t, Nm(100), ts.Width)
 	assert.Equal(t, common.Horizontal, ts.Dir)
 	assert.Equal(t, 10, ts.NumTracks)
 }
 
 func TestFTC_NewTrackM3_OutOfRange_ReturnsError(t *testing.T) {
 	c := newFTC()
-	_, err := c.NewTrack(common.M3, 10, 0, 100, 1)
+	_, err := c.NewTrack(common.M3, 10, 1, 0, 100)
 	assert.ErrorIs(t, err, ErrInvalidTrackID)
 }

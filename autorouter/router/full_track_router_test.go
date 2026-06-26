@@ -15,9 +15,9 @@ import (
 func newFTCanvas(width, height, m2tw, m3tw int) *canvas.FullTrackCanvas {
 	return &canvas.FullTrackCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
-		UpperRight: common.Point{X: width, Y: height},
-		M2Storage:  canvas.NewTrackSegmentStorage(width/m2tw, m2tw),
-		M3Storage:  canvas.NewTrackSegmentStorage(height/m3tw, m3tw),
+		UpperRight: common.Point{X: common.Nm(width), Y: common.Nm(height)},
+		M2Storage:  canvas.NewTrackSegmentStorage(width/m2tw, common.Nm(m2tw)),
+		M3Storage:  canvas.NewTrackSegmentStorage(height/m3tw, common.Nm(m3tw)),
 		M2Dir:      common.Vertical,
 	}
 }
@@ -27,29 +27,31 @@ func newFTRouter(c *canvas.FullTrackCanvas) *router.FullTrackRouter {
 }
 
 // endExtDRC is a DRCSpec with a fixed symmetric end extension and no min-area constraint.
-type endExtDRC struct{ ext int }
+type endExtDRC struct{ ext common.Nm }
 
-func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool       { return true }
-func (d endExtDRC) ApplyEndExtension(lo, hi int) (int, int)      { return lo - d.ext, hi + d.ext }
-func (d endExtDRC) ViaEnclosure() int                            { return d.ext }
-func (d endExtDRC) ViaTrackSpacing() int                         { return 1 }
-func (d endExtDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo, hi }
-func (d endExtDRC) MinPinOverlap() int                           { return 0 }
+func (d endExtDRC) SatisfiesMinArea(_ common.Segment) bool { return true }
+func (d endExtDRC) ApplyEndExtension(lo, hi common.Nm) (common.Nm, common.Nm) {
+	return lo - d.ext, hi + d.ext
+}
+func (d endExtDRC) ViaEnclosure() common.Nm                                        { return d.ext }
+func (d endExtDRC) ViaTrackSpacing() int                                           { return 1 }
+func (d endExtDRC) ApplyMinSpaceExtension(lo, hi common.Nm) (common.Nm, common.Nm) { return lo, hi }
+func (d endExtDRC) MinPinOverlap() common.Nm                                       { return 0 }
 
 // ftPins builds RoutingPin slices with explicit X and Y ranges.
 func ftPins(coords ...[4]int) []common.RoutingPin {
 	ps := make([]common.RoutingPin, len(coords))
 	for i, c := range coords {
-		ps[i] = common.RoutingPin{XLow: c[0], XHigh: c[1], YLow: c[2], YHigh: c[3]}
+		ps[i] = common.RoutingPin{XLow: common.Nm(c[0]), XHigh: common.Nm(c[1]), YLow: common.Nm(c[2]), YHigh: common.Nm(c[3])}
 	}
 	return ps
 }
 
 // occupyFTM3Track marks a full-width M3 track as occupied on a FullTrackCanvas.
-func occupyFTM3Track(c *canvas.FullTrackCanvas, trackID, start, end, netID, tw int) error {
+func occupyFTM3Track(c *canvas.FullTrackCanvas, trackID, netID, tw int, start, end common.Nm) error {
 	return c.Occupy(common.Segment{
-		LowerLeft:    common.Point{X: start, Y: trackID * tw},
-		UpperRight:   common.Point{X: end, Y: (trackID + 1) * tw},
+		LowerLeft:    common.Point{X: start, Y: common.Nm(trackID * tw)},
+		UpperRight:   common.Point{X: end, Y: common.Nm((trackID + 1) * tw)},
 		NetID:        netID,
 		Layer:        common.M3,
 		CanvasOrigin: common.Point{X: 0, Y: 0},
@@ -58,10 +60,10 @@ func occupyFTM3Track(c *canvas.FullTrackCanvas, trackID, start, end, netID, tw i
 }
 
 // occupyFTM2Track marks a single M2 track segment as occupied on a FullTrackCanvas.
-func occupyFTM2Track(c *canvas.FullTrackCanvas, trackID, start, end, netID, tw int) error {
+func occupyFTM2Track(c *canvas.FullTrackCanvas, trackID, netID, tw int, start, end common.Nm) error {
 	return c.Occupy(common.Segment{
-		LowerLeft:    common.Point{X: trackID * tw, Y: start},
-		UpperRight:   common.Point{X: (trackID + 1) * tw, Y: end},
+		LowerLeft:    common.Point{X: common.Nm(trackID * tw), Y: start},
+		UpperRight:   common.Point{X: common.Nm((trackID + 1) * tw), Y: end},
 		NetID:        netID,
 		Layer:        common.M2,
 		CanvasOrigin: common.Point{X: 0, Y: 0},
@@ -119,7 +121,7 @@ func TestFTRoute_ZeroWidthPin_ReturnsErrPinMisaligned(t *testing.T) {
 // delta=2: track 7 is first valid (prev=6 passible).
 func TestFTRoute_MidM3TrackBlocked_FallsBack(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
-	require.NoError(t, occupyFTM3Track(c, 5, 0, 1000, 99, 100))
+	require.NoError(t, occupyFTM3Track(c, 5, 99, 100, 0, 1000))
 	r := newFTRouter(c)
 
 	segs, err := r.Route(ftPins([4]int{0, 10, 100, 200}, [4]int{500, 510, 900, 1000}), 1)
@@ -133,8 +135,8 @@ func TestFTRoute_MidM3TrackBlocked_FallsBack(t *testing.T) {
 // delta=2: track 7 fails (prev=6 blocked); track 3 passes (next=4 passible).
 func TestFTRoute_TwoAdjacentM3TracksBlocked_SkipsBoth(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
-	require.NoError(t, occupyFTM3Track(c, 5, 0, 1000, 99, 100))
-	require.NoError(t, occupyFTM3Track(c, 6, 0, 1000, 99, 100))
+	require.NoError(t, occupyFTM3Track(c, 5, 99, 100, 0, 1000))
+	require.NoError(t, occupyFTM3Track(c, 6, 99, 100, 0, 1000))
 	r := newFTRouter(c)
 
 	segs, err := r.Route(ftPins([4]int{0, 10, 100, 200}, [4]int{500, 510, 900, 1000}), 1)
@@ -150,7 +152,7 @@ func TestFTRoute_PreferredM2TrackBlocked_UsesNextCandidate(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
 	// midY=(100+100)/2=100 → midTrack=1 → M3 Y=[100,200]
 	// M2 extent for pin1: Y=[100,200]; block track 0 there.
-	require.NoError(t, occupyFTM2Track(c, 0, 100, 200, 99, 10))
+	require.NoError(t, occupyFTM2Track(c, 0, 99, 10, 100, 200))
 	r := newFTRouter(c)
 
 	// Pin1: X=[0,25] → candidates [0,1,2] sorted by proximity → [1,0,2].
@@ -159,7 +161,7 @@ func TestFTRoute_PreferredM2TrackBlocked_UsesNextCandidate(t *testing.T) {
 
 	require.NoError(t, err)
 	// M2 for pin1 should use track 2 (X=20).
-	assert.Equal(t, 20, segs[0].LowerLeft.X, "pin1 M2 should use track 2 (X=20)")
+	assert.Equal(t, common.Nm(20), segs[0].LowerLeft.X, "pin1 M2 should use track 2 (X=20)")
 }
 
 // Two pins whose natural M2 track assignment would be adjacent.
@@ -178,8 +180,8 @@ func TestFTRoute_IntraPinAdjacentM2_UsesNonAdjacentTrack(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, segs, 3)
 	// segs[0]=pin1 M2, segs[1]=pin2 M2, segs[2]=M3.
-	assert.Equal(t, 0, segs[0].LowerLeft.X, "pin1 M2 should be track 0 (X=0)")
-	assert.Equal(t, 200, segs[1].LowerLeft.X, "pin2 M2 should skip adjacent track 1 and use track 2 (X=200)")
+	assert.Equal(t, common.Nm(0), segs[0].LowerLeft.X, "pin1 M2 should be track 0 (X=0)")
+	assert.Equal(t, common.Nm(200), segs[1].LowerLeft.X, "pin2 M2 should skip adjacent track 1 and use track 2 (X=200)")
 }
 
 // Both pins span X=[0,100] with m2tw=100 → both land on M2 track 0.
@@ -200,16 +202,16 @@ func TestFTRoute_SameM2Track_NoM3(t *testing.T) {
 	assert.Equal(t, common.M2, segs[1].Layer)
 	assert.Equal(t, common.M2, segs[2].Layer)
 	// pin0 M2 covers its own Y range
-	assert.Equal(t, 100, segs[0].LowerLeft.Y)
-	assert.Equal(t, 200, segs[0].UpperRight.Y)
+	assert.Equal(t, common.Nm(100), segs[0].LowerLeft.Y)
+	assert.Equal(t, common.Nm(200), segs[0].UpperRight.Y)
 	// pin1 M2 covers its own Y range
-	assert.Equal(t, 500, segs[1].LowerLeft.Y)
-	assert.Equal(t, 600, segs[1].UpperRight.Y)
+	assert.Equal(t, common.Nm(500), segs[1].LowerLeft.Y)
+	assert.Equal(t, common.Nm(600), segs[1].UpperRight.Y)
 	// connector M2 spans full range, no DRC extension
-	assert.Equal(t, 0, segs[2].LowerLeft.X, "connector on same M2 track 0")
-	assert.Equal(t, 100, segs[2].UpperRight.X)
-	assert.Equal(t, 100, segs[2].LowerLeft.Y, "connector starts at min pin start")
-	assert.Equal(t, 600, segs[2].UpperRight.Y, "connector ends at max pin end")
+	assert.Equal(t, common.Nm(0), segs[2].LowerLeft.X, "connector on same M2 track 0")
+	assert.Equal(t, common.Nm(100), segs[2].UpperRight.X)
+	assert.Equal(t, common.Nm(100), segs[2].LowerLeft.Y, "connector starts at min pin start")
+	assert.Equal(t, common.Nm(600), segs[2].UpperRight.Y, "connector ends at max pin end")
 }
 
 // Three pins all on the same M2 track; connector must span the full extent.
@@ -235,14 +237,14 @@ func TestFTRoute_SameM2Track_ThreePins_ConnectorSpansAll(t *testing.T) {
 			connector = s
 		}
 	}
-	assert.Equal(t, 50, connector.LowerLeft.Y, "connector starts at min pin start")
-	assert.Equal(t, 800, connector.UpperRight.Y, "connector ends at max pin end")
+	assert.Equal(t, common.Nm(50), connector.LowerLeft.Y, "connector starts at min pin start")
+	assert.Equal(t, common.Nm(800), connector.UpperRight.Y, "connector ends at max pin end")
 }
 
 func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
 	for i := 0; i < 10; i++ {
-		require.NoError(t, occupyFTM3Track(c, i, 0, 1000, 99, 100))
+		require.NoError(t, occupyFTM3Track(c, i, 99, 100, 0, 1000))
 	}
 	r := newFTRouter(c)
 
@@ -252,7 +254,7 @@ func TestFTRoute_AllM3TracksBlocked_ReturnsErrNoPath(t *testing.T) {
 
 func TestFTRoute_SameNetID_IgnoresOwnBlocks(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 10, 100)
-	require.NoError(t, occupyFTM3Track(c, 5, 0, 1000, 1, 100))
+	require.NoError(t, occupyFTM3Track(c, 5, 1, 100, 0, 1000))
 	r := newFTRouter(c)
 
 	segs, err := r.Route(ftPins([4]int{0, 10, 100, 200}, [4]int{500, 510, 900, 1000}), 1)
@@ -277,8 +279,8 @@ func TestFTRoute_HorizontalM2Dir_WrongM3Track(t *testing.T) {
 	c := &canvas.FullTrackCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
-		M2Storage:  canvas.NewTrackSegmentStorage(10, 100),
-		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+		M2Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 		M2Dir:      common.Horizontal,
 	}
 	r := router.NewFullTrackRouter(c, common.Horizontal, common.NoDRC{}, common.NoDRC{})
@@ -299,13 +301,13 @@ func TestFTRoute_HorizontalM2Dir_WrongM3Track(t *testing.T) {
 
 	// M3 is vertical: its X range identifies the track.
 	// Expected: track 2 → X=[200,300]. Bug: router picks X=[400,500] (track 4 via midY).
-	assert.Equal(t, 200, m3Seg.LowerLeft.X, "M3 should be at X=200 (track 2); bug produces X=400 (track 4 via midY)")
-	assert.Equal(t, 300, m3Seg.UpperRight.X, "M3 UpperRight.X should be 300")
+	assert.Equal(t, common.Nm(200), m3Seg.LowerLeft.X, "M3 should be at X=200 (track 2); bug produces X=400 (track 4 via midY)")
+	assert.Equal(t, common.Nm(300), m3Seg.UpperRight.X, "M3 UpperRight.X should be 300")
 
 	// M3 should span the full Y range connecting the two M2 tracks.
 	// Expected: Y=[0,1000]. Bug: M3 Y is wrong too (computed from X coords of wrong M2 tracks).
-	assert.Equal(t, 0, m3Seg.LowerLeft.Y, "M3 should start at Y=0 (M2 track 0)")
-	assert.Equal(t, 1000, m3Seg.UpperRight.Y, "M3 should end at Y=1000 (M2 track 9)")
+	assert.Equal(t, common.Nm(0), m3Seg.LowerLeft.Y, "M3 should start at Y=0 (M2 track 0)")
+	assert.Equal(t, common.Nm(1000), m3Seg.UpperRight.Y, "M3 should end at Y=1000 (M2 track 9)")
 }
 
 // --- ViaTrackSpacing ---
@@ -335,7 +337,7 @@ func TestFTRoute_ViaTrackSpacingDefault_AllowsGapOfTwo(t *testing.T) {
 	var m2Tracks []int
 	for _, s := range segs {
 		if s.Layer == common.M2 {
-			m2Tracks = append(m2Tracks, s.LowerLeft.X/100)
+			m2Tracks = append(m2Tracks, int(s.LowerLeft.X/100))
 		}
 	}
 	require.Len(t, m2Tracks, 2)
@@ -376,7 +378,7 @@ func TestFTRoute_ViaTrackSpacing_RouterPicksFarTrack(t *testing.T) {
 	var m2Tracks []int
 	for _, s := range segs {
 		if s.Layer == common.M2 {
-			m2Tracks = append(m2Tracks, s.LowerLeft.X/100)
+			m2Tracks = append(m2Tracks, int(s.LowerLeft.X/100))
 		}
 	}
 	require.Len(t, m2Tracks, 2)
@@ -392,24 +394,28 @@ func TestFTRoute_ViaTrackSpacing_RouterPicksFarTrack(t *testing.T) {
 // minSpaceDRC is a NoDRC variant that only overrides ApplyMinSpaceExtension.
 type minSpaceDRC struct {
 	common.NoDRC
-	space int
+	space common.Nm
 }
 
-func (d minSpaceDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) { return lo - d.space, hi + d.space }
+func (d minSpaceDRC) ApplyMinSpaceExtension(lo, hi common.Nm) (common.Nm, common.Nm) {
+	return lo - d.space, hi + d.space
+}
 
 // Canvas 1000×1000, m2tw=100, m3tw=100, m2DRC.minSpace=50.
 // Occupied M2 track 0: Y=[0,400]. Pin1 on track 0 only.
 //
 // Rejection: pin1 Y=[440,540].
-//   For any M3 track t, m2Start = min(440, t*100) ≤ 440.
-//   Space-extended start ≤ 440-50=390 < 400 → always overlaps [0,400] → ErrNoPath.
+//
+//	For any M3 track t, m2Start = min(440, t*100) ≤ 440.
+//	Space-extended start ≤ 440-50=390 < 400 → always overlaps [0,400] → ErrNoPath.
 //
 // Acceptance: pin1 Y=[460,560].
-//   M3 track 5 (m3Lower=500): m2Start=min(460,500)=460, extended_start=410 > 400
-//   → no overlap → routing succeeds.
+//
+//	M3 track 5 (m3Lower=500): m2Start=min(460,500)=460, extended_start=410 > 400
+//	→ no overlap → routing succeeds.
 func TestFTRoute_M2MinSpace_RejectsSegmentTooClose(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 100, 100)
-	require.NoError(t, occupyFTM2Track(c, 0, 0, 400, -1, 100))
+	require.NoError(t, occupyFTM2Track(c, 0, -1, 100, 0, 400))
 
 	r := router.NewFullTrackRouter(c, common.Vertical, minSpaceDRC{space: 50}, common.NoDRC{})
 
@@ -423,7 +429,7 @@ func TestFTRoute_M2MinSpace_RejectsSegmentTooClose(t *testing.T) {
 
 func TestFTRoute_M2MinSpace_AcceptsSegmentFarEnough(t *testing.T) {
 	c := newFTCanvas(1000, 1000, 100, 100)
-	require.NoError(t, occupyFTM2Track(c, 0, 0, 400, -1, 100))
+	require.NoError(t, occupyFTM2Track(c, 0, -1, 100, 0, 400))
 
 	r := router.NewFullTrackRouter(c, common.Vertical, minSpaceDRC{space: 50}, common.NoDRC{})
 
@@ -506,8 +512,8 @@ func TestFTRoute_M2Pin_EndExtensionApplied(t *testing.T) {
 			break
 		}
 	}
-	assert.Equal(t, 450, m2Pin2.LowerLeft.Y, "M2 pin segment must extend past M3 lower bound (bug: no DRC extension)")
-	assert.Equal(t, 650, m2Pin2.UpperRight.Y, "M2 pin segment must extend past M3 upper bound (bug: no DRC extension)")
+	assert.Equal(t, common.Nm(450), m2Pin2.LowerLeft.Y, "M2 pin segment must extend past M3 lower bound (bug: no DRC extension)")
+	assert.Equal(t, common.Nm(650), m2Pin2.UpperRight.Y, "M2 pin segment must extend past M3 upper bound (bug: no DRC extension)")
 }
 
 // TestFTRoute_M2Pin_PinLargerThanExtendedM3 verifies that when an M2-layer
@@ -539,8 +545,8 @@ func TestFTRoute_M2Pin_PinLargerThanExtendedM3(t *testing.T) {
 			break
 		}
 	}
-	assert.Equal(t, 350, m2Pin2.LowerLeft.Y, "M2 pin lower end must extend to M3 extension even when pin is large")
-	assert.Equal(t, 700, m2Pin2.UpperRight.Y, "M2 pin upper end must use pin range when larger than extension")
+	assert.Equal(t, common.Nm(350), m2Pin2.LowerLeft.Y, "M2 pin lower end must extend to M3 extension even when pin is large")
+	assert.Equal(t, common.Nm(700), m2Pin2.UpperRight.Y, "M2 pin upper end must use pin range when larger than extension")
 }
 
 // Route returns len(pins)+1 segments: one M2 per pin plus one M3.

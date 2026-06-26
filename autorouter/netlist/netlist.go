@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"sort"
 	"strings"
@@ -15,7 +14,7 @@ import (
 type StringSet = map[string]struct{}
 
 type PinDB interface {
-	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error)
+	Query(lib, cell, pin string) (xLow, xHigh, yLow, yHigh common.Nm, layer common.Layer, err error)
 }
 
 func toSet(ss []string) StringSet {
@@ -64,16 +63,16 @@ func buildNets(layout Layout, schematic Schematic, db PinDB, minOverlapLibs []st
 				pins = append(pins, common.RoutingPin{
 					Name:       instPin,
 					Layer:      termLayer,
-					XLow:       int(math.Round(term.Bbox[0][0] * 1000)),
-					YLow:       int(math.Round(term.Bbox[0][1] * 1000)),
-					XHigh:      int(math.Round(term.Bbox[1][0] * 1000)),
-					YHigh:      int(math.Round(term.Bbox[1][1] * 1000)),
+					XLow:       common.Micron(term.Bbox[0][0]).ToNm(),
+					YLow:       common.Micron(term.Bbox[0][1]).ToNm(),
+					XHigh:      common.Micron(term.Bbox[1][0]).ToNm(),
+					YHigh:      common.Micron(term.Bbox[1][1]).ToNm(),
 					MinOverlap: isMinOverlap,
 				})
 				continue
 			}
-			instX := int(math.Round(inst.XY[0] * 1000))
-			instY := int(math.Round(inst.XY[1] * 1000))
+			instX := common.Micron(inst.XY[0]).ToNm()
+			instY := common.Micron(inst.XY[1]).ToNm()
 			txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 			pins = append(pins, common.RoutingPin{
 				Name:       instPin,
@@ -138,15 +137,15 @@ func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string
 			layoutPins = append(layoutPins, &common.RoutingPin{
 				Name:  name,
 				Layer: termLayer,
-				XLow:  int(math.Round(term.Bbox[0][0] * 1000)),
-				YLow:  int(math.Round(term.Bbox[0][1] * 1000)),
-				XHigh: int(math.Round(term.Bbox[1][0] * 1000)),
-				YHigh: int(math.Round(term.Bbox[1][1] * 1000)),
+				XLow:  common.Micron(term.Bbox[0][0]).ToNm(),
+				YLow:  common.Micron(term.Bbox[0][1]).ToNm(),
+				XHigh: common.Micron(term.Bbox[1][0]).ToNm(),
+				YHigh: common.Micron(term.Bbox[1][1]).ToNm(),
 			})
 			continue
 		}
-		instX := int(math.Round(inst.XY[0] * 1000))
-		instY := int(math.Round(inst.XY[1] * 1000))
+		instX := common.Micron(inst.XY[0]).ToNm()
+		instY := common.Micron(inst.XY[1]).ToNm()
 		txLow, txHigh, tyLow, tyHigh := transformPin(xLow, xHigh, yLow, yHigh, parseOrient(inst.Orient))
 		layoutPins = append(layoutPins, &common.RoutingPin{
 			Name:  name,

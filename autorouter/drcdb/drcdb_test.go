@@ -16,7 +16,7 @@ import (
 func segWithArea(area int) common.Segment {
 	return common.Segment{
 		LowerLeft:  common.Point{X: 0, Y: 0},
-		UpperRight: common.Point{X: area, Y: 1},
+		UpperRight: common.Point{X: common.Nm(area), Y: 1},
 	}
 }
 
@@ -103,9 +103,9 @@ via_enclosure = 30
 	spec, err := db.Query("lib", "M2")
 	require.NoError(t, err)
 	lo, hi := spec.ApplyEndExtension(100, 200)
-	assert.Equal(t, 40, lo)  // 100 - 60
-	assert.Equal(t, 260, hi) // 200 + 60
-	assert.Equal(t, 30, spec.ViaEnclosure())
+	assert.Equal(t, common.Nm(40), lo)  // 100 - 60
+	assert.Equal(t, common.Nm(260), hi) // 200 + 60
+	assert.Equal(t, common.Nm(30), spec.ViaEnclosure())
 }
 
 func TestQuery_ViaEnclosureDefaultsToZero(t *testing.T) {
@@ -114,7 +114,7 @@ func TestQuery_ViaEnclosureDefaultsToZero(t *testing.T) {
 
 	spec, err := db.Query("tsmc18", "M2")
 	require.NoError(t, err)
-	assert.Equal(t, 0, spec.ViaEnclosure())
+	assert.Equal(t, common.Nm(0), spec.ViaEnclosure())
 }
 
 func TestQuery_ReturnsViaTrackSpacing(t *testing.T) {
@@ -150,8 +150,8 @@ min_space = 40
 	spec, err := db.Query("lib", "M2")
 	require.NoError(t, err)
 	lo, hi := spec.ApplyMinSpaceExtension(100, 500)
-	assert.Equal(t, 60, lo)
-	assert.Equal(t, 540, hi)
+	assert.Equal(t, common.Nm(60), lo)
+	assert.Equal(t, common.Nm(540), hi)
 }
 
 func TestQuery_MinSpaceDefaultsToNoOp(t *testing.T) {
@@ -161,6 +161,6 @@ func TestQuery_MinSpaceDefaultsToNoOp(t *testing.T) {
 	spec, err := db.Query("tsmc18", "M2")
 	require.NoError(t, err)
 	lo, hi := spec.ApplyMinSpaceExtension(100, 500)
-	assert.Equal(t, 100, lo)
-	assert.Equal(t, 500, hi)
+	assert.Equal(t, common.Nm(100), lo)
+	assert.Equal(t, common.Nm(500), hi)
 }

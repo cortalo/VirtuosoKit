@@ -54,7 +54,7 @@ func (inst Instance) AbsoluteMetals() []common.Shape {
 	for i, m := range inst.Metals {
 		xLow, xHigh := m.LowerLeft.X, m.UpperRight.X
 		yLow, yHigh := m.LowerLeft.Y, m.UpperRight.Y
-		var txLow, txHigh, tyLow, tyHigh int
+		var txLow, txHigh, tyLow, tyHigh common.Nm
 		switch inst.Orient {
 		case R90: // (x,y) → (-y, x)
 			txLow, txHigh, tyLow, tyHigh = -yHigh, -yLow, xLow, xHigh
@@ -166,16 +166,16 @@ func (c *FullTrackCanvas) Occupy(seg Segment) error {
 	return st.Occupy(ts)
 }
 
-func (c *FullTrackCanvas) NewTrack(layer common.Layer, trackID, start, end, netID int) (TrackSegment, error) {
+func (c *FullTrackCanvas) NewTrack(layer common.Layer, trackID, netID int, start, end common.Nm) (TrackSegment, error) {
 	st := c.storageFor(layer)
 	tw := st.GetTrackWidth()
 	dir := lo.Must(c.dirForLayer(layer))
 	var numTracks int
 	switch dir {
 	case common.Horizontal:
-		numTracks = (c.UpperRight.Y - c.LowerLeft.Y) / tw
+		numTracks = int((c.UpperRight.Y - c.LowerLeft.Y) / tw)
 	case common.Vertical:
-		numTracks = (c.UpperRight.X - c.LowerLeft.X) / tw
+		numTracks = int((c.UpperRight.X - c.LowerLeft.X) / tw)
 	default:
 		panic(ErrUnknownLayer)
 	}
@@ -214,6 +214,6 @@ func (c *FullTrackCanvas) GetUpperRight() Point {
 	return c.UpperRight
 }
 
-func (c *FullTrackCanvas) GetTrackWidth(layer common.Layer) int {
+func (c *FullTrackCanvas) GetTrackWidth(layer common.Layer) common.Nm {
 	return c.storageFor(layer).GetTrackWidth()
 }

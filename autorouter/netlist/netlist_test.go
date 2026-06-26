@@ -16,11 +16,11 @@ type stubDB struct {
 }
 
 type stubPinData struct {
-	xLow, xHigh, yLow, yHigh int
+	xLow, xHigh, yLow, yHigh common.Nm
 	layer                    common.Layer
 }
 
-func (db *stubDB) Query(lib, cell, pin string) (int, int, int, int, common.Layer, error) {
+func (db *stubDB) Query(lib, cell, pin string) (common.Nm, common.Nm, common.Nm, common.Nm, common.Layer, error) {
 	if p, ok := db.pins[lib+"/"+cell+"/"+pin]; ok {
 		return p.xLow, p.xHigh, p.yLow, p.yHigh, p.layer, nil
 	}
@@ -172,14 +172,14 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	pins := nl.Nets[0].Pins
 	require.Len(t, pins, 2)
 	// I0 at (1000, 2000) nm + pin (10,20,30,40) R0 → no transform → (1010, 1020, 2030, 2040)
-	assert.Equal(t, 1010, pins[0].XLow)
-	assert.Equal(t, 1020, pins[0].XHigh)
-	assert.Equal(t, 2030, pins[0].YLow)
-	assert.Equal(t, 2040, pins[0].YHigh)
+	assert.Equal(t, common.Nm(1010), pins[0].XLow)
+	assert.Equal(t, common.Nm(1020), pins[0].XHigh)
+	assert.Equal(t, common.Nm(2030), pins[0].YLow)
+	assert.Equal(t, common.Nm(2040), pins[0].YHigh)
 	assert.Equal(t, common.M1, pins[0].Layer)
 	// I1 at (3000, 4000) nm
-	assert.Equal(t, 3010, pins[1].XLow)
-	assert.Equal(t, 4030, pins[1].YLow)
+	assert.Equal(t, common.Nm(3010), pins[1].XLow)
+	assert.Equal(t, common.Nm(4030), pins[1].YLow)
 }
 
 func TestSchematicFilter_IncludeNets_OnlyKeepsListedNets(t *testing.T) {
@@ -237,35 +237,35 @@ func TestBuildNets_PinNotFound_ReturnsError(t *testing.T) {
 }
 
 func TestTransformPin(t *testing.T) {
-	xL, xH, yL, yH := 100, 200, 300, 400
+	xL, xH, yL, yH := common.Nm(100), common.Nm(200), common.Nm(300), common.Nm(400)
 
 	t.Run("R0", func(t *testing.T) {
 		xl, xh, yl, yh := transformPin(xL, xH, yL, yH, "R0")
-		assert.Equal(t, 100, xl)
-		assert.Equal(t, 200, xh)
-		assert.Equal(t, 300, yl)
-		assert.Equal(t, 400, yh)
+		assert.Equal(t, common.Nm(100), xl)
+		assert.Equal(t, common.Nm(200), xh)
+		assert.Equal(t, common.Nm(300), yl)
+		assert.Equal(t, common.Nm(400), yh)
 	})
 	t.Run("MX", func(t *testing.T) {
 		xl, xh, yl, yh := transformPin(xL, xH, yL, yH, "MX")
-		assert.Equal(t, 100, xl)
-		assert.Equal(t, 200, xh)
-		assert.Equal(t, -400, yl)
-		assert.Equal(t, -300, yh)
+		assert.Equal(t, common.Nm(100), xl)
+		assert.Equal(t, common.Nm(200), xh)
+		assert.Equal(t, common.Nm(-400), yl)
+		assert.Equal(t, common.Nm(-300), yh)
 	})
 	t.Run("MY", func(t *testing.T) {
 		xl, xh, yl, yh := transformPin(xL, xH, yL, yH, "MY")
-		assert.Equal(t, -200, xl)
-		assert.Equal(t, -100, xh)
-		assert.Equal(t, 300, yl)
-		assert.Equal(t, 400, yh)
+		assert.Equal(t, common.Nm(-200), xl)
+		assert.Equal(t, common.Nm(-100), xh)
+		assert.Equal(t, common.Nm(300), yl)
+		assert.Equal(t, common.Nm(400), yh)
 	})
 	t.Run("R180", func(t *testing.T) {
 		xl, xh, yl, yh := transformPin(xL, xH, yL, yH, "R180")
-		assert.Equal(t, -200, xl)
-		assert.Equal(t, -100, xh)
-		assert.Equal(t, -400, yl)
-		assert.Equal(t, -300, yh)
+		assert.Equal(t, common.Nm(-200), xl)
+		assert.Equal(t, common.Nm(-100), xh)
+		assert.Equal(t, common.Nm(-400), yl)
+		assert.Equal(t, common.Nm(-300), yh)
 	})
 	t.Run("unknown acts as R0", func(t *testing.T) {
 		xl, xh, yl, yh := transformPin(xL, xH, yL, yH, "XYZ")
@@ -313,7 +313,7 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 	type wantPinData struct {
 		name                     string
 		layer                    common.Layer
-		xLow, xHigh, yLow, yHigh int
+		xLow, xHigh, yLow, yHigh common.Nm
 	}
 	type wantNetData struct {
 		pins []wantPinData

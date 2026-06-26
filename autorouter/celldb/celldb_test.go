@@ -76,10 +76,10 @@ func TestQuery_ReturnsCorrectCoordinates(t *testing.T) {
 
 	xLow, xHigh, yLow, yHigh, _, err := db.Query("tsmc18", "nmos2v", "D")
 	require.NoError(t, err)
-	assert.Equal(t, 10, xLow)
-	assert.Equal(t, 30, xHigh)
-	assert.Equal(t, 20, yLow)
-	assert.Equal(t, 50, yHigh)
+	assert.Equal(t, common.Nm(10), xLow)
+	assert.Equal(t, common.Nm(30), xHigh)
+	assert.Equal(t, common.Nm(20), yLow)
+	assert.Equal(t, common.Nm(50), yHigh)
 }
 
 func TestQuery_DifferentLibAndCell(t *testing.T) {
@@ -88,10 +88,10 @@ func TestQuery_DifferentLibAndCell(t *testing.T) {
 
 	xLow, xHigh, yLow, yHigh, _, err := db.Query("other", "cell1", "A")
 	require.NoError(t, err)
-	assert.Equal(t, 1, xLow)
-	assert.Equal(t, 3, xHigh)
-	assert.Equal(t, 2, yLow)
-	assert.Equal(t, 4, yHigh)
+	assert.Equal(t, common.Nm(1), xLow)
+	assert.Equal(t, common.Nm(3), xHigh)
+	assert.Equal(t, common.Nm(2), yLow)
+	assert.Equal(t, common.Nm(4), yHigh)
 }
 
 func TestQuery_LibNotFound(t *testing.T) {
@@ -134,10 +134,10 @@ func TestQuery_M2LayerPin(t *testing.T) {
 	xLow, xHigh, yLow, yHigh, layer, err := db.Query("tsmc18", "nmos2v", "M2PIN")
 	require.NoError(t, err)
 	assert.Equal(t, common.M2, layer)
-	assert.Equal(t, 100, xLow)
-	assert.Equal(t, 200, xHigh)
-	assert.Equal(t, 0, yLow)
-	assert.Equal(t, 400, yHigh)
+	assert.Equal(t, common.Nm(100), xLow)
+	assert.Equal(t, common.Nm(200), xHigh)
+	assert.Equal(t, common.Nm(0), yLow)
+	assert.Equal(t, common.Nm(400), yHigh)
 }
 
 // --- QueryMetals ---

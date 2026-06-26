@@ -47,22 +47,22 @@ func TestIntegration_Inv2RawLayout_Orientation(t *testing.T) {
 	// VOUT → I1.ZN (MY at 5000,0): ZN pin X negated then shifted
 	require.Len(t, nl.Pins, 2)
 	assert.Equal(t, "VIN", nl.Pins[0].Name)
-	assert.Equal(t, 100, nl.Pins[0].XLow)
-	assert.Equal(t, 200, nl.Pins[0].XHigh)
-	assert.Equal(t, -300, nl.Pins[0].YLow)
-	assert.Equal(t, -100, nl.Pins[0].YHigh)
+	assert.Equal(t, common.Nm(100), nl.Pins[0].XLow)
+	assert.Equal(t, common.Nm(200), nl.Pins[0].XHigh)
+	assert.Equal(t, common.Nm(-300), nl.Pins[0].YLow)
+	assert.Equal(t, common.Nm(-100), nl.Pins[0].YHigh)
 	assert.Equal(t, "VOUT", nl.Pins[1].Name)
-	assert.Equal(t, 4100, nl.Pins[1].XLow)
-	assert.Equal(t, 4200, nl.Pins[1].XHigh)
-	assert.Equal(t, 100, nl.Pins[1].YLow)
-	assert.Equal(t, 300, nl.Pins[1].YHigh)
+	assert.Equal(t, common.Nm(4100), nl.Pins[1].XLow)
+	assert.Equal(t, common.Nm(4200), nl.Pins[1].XHigh)
+	assert.Equal(t, common.Nm(100), nl.Pins[1].YLow)
+	assert.Equal(t, common.Nm(300), nl.Pins[1].YHigh)
 
-	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
+	m3TrackCount := int((ur.Y - ll.Y) / common.Nm(m3TrackWidth))
 	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
-		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
+		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, common.Nm(m3TrackWidth)),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})
@@ -103,18 +103,18 @@ func TestIntegration_Inv2RawLayout_Orientation(t *testing.T) {
 
 	// I0 has MX orientation: pin ZN Y coords are negated relative to cell origin.
 	// Without MX the stub would sit at Y≥100; with MX it sits at Y≤0.
-	assert.Equal(t, 800, m2ZN.LowerLeft.X, "I0.ZN XLow unaffected by MX")
-	assert.Equal(t, -300, m2ZN.LowerLeft.Y, "I0.ZN MX flips pin YLow: -yHigh=-300")
-	assert.Equal(t, 0, m2ZN.UpperRight.Y, "I0.ZN M2 reaches track top (Y=0)")
+	assert.Equal(t, common.Nm(800), m2ZN.LowerLeft.X, "I0.ZN XLow unaffected by MX")
+	assert.Equal(t, common.Nm(-300), m2ZN.LowerLeft.Y, "I0.ZN MX flips pin YLow: -yHigh=-300")
+	assert.Equal(t, common.Nm(0), m2ZN.UpperRight.Y, "I0.ZN M2 reaches track top (Y=0)")
 
 	// I1 has MY orientation: pin I X coords are negated relative to cell origin,
 	// then offset by instX=5000. Without MY XLow would be 5000+100=5100.
-	assert.Equal(t, 4800, m2I.LowerLeft.X, "I1.I MY flips X: 5000-200=4800")
-	assert.Equal(t, 300, m2I.UpperRight.Y, "I1.I M2 extended to cover pin YHigh=300")
+	assert.Equal(t, common.Nm(4800), m2I.LowerLeft.X, "I1.I MY flips X: 5000-200=4800")
+	assert.Equal(t, common.Nm(300), m2I.UpperRight.Y, "I1.I M2 extended to cover pin YHigh=300")
 
 	// M3 spans from the leftmost pin XLow (800) to the rightmost pin XHigh (4900).
-	assert.Equal(t, 800, m3Segs[0].LowerLeft.X, "M3 starts at I0.ZN XLow")
-	assert.Equal(t, 4900, m3Segs[0].UpperRight.X, "M3 ends at I1.I XHigh")
+	assert.Equal(t, common.Nm(800), m3Segs[0].LowerLeft.X, "M3 starts at I0.ZN XLow")
+	assert.Equal(t, common.Nm(4900), m3Segs[0].UpperRight.X, "M3 ends at I1.I XHigh")
 }
 
 // Canvas: 1000x1000, trackWidth=100 (10 tracks).
@@ -139,12 +139,12 @@ func TestIntegration_InvLayout_AllNetsRoute(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
 
-	m3TrackCount := (ur.Y - ll.Y) / m3TrackWidth
+	m3TrackCount := int((ur.Y - ll.Y) / common.Nm(m3TrackWidth))
 	c := &canvas.TwoLayerCanvas{
 		LowerLeft:  ll,
 		UpperRight: ur,
 		M2Storage:  canvas.NewSegmentStore(ll, ur),
-		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, m3TrackWidth),
+		M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, common.Nm(m3TrackWidth)),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	s := session.NewSession(c, r, nl, common.ViaConfig{}, common.ViaConfig{}, common.NoDRC{}, common.NoDRC{})

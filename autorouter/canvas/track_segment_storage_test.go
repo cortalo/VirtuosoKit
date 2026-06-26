@@ -126,5 +126,5 @@ func TestTrackStorage_Occupy_MultipleTracks_Independent(t *testing.T) {
 
 func TestTrackStorage_GetTrackWidth_ReturnsCorrectWidth(t *testing.T) {
 	s := NewTrackSegmentStorage(5, 46)
-	assert.Equal(t, 46, s.GetTrackWidth())
+	assert.Equal(t, Nm(46), s.GetTrackWidth())
 }

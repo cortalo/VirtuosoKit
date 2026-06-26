@@ -4,7 +4,7 @@ package common
 // vc defines the cut geometry; cutLayer is the layer for the cut shapes;
 // endExt is the via enclosure (the overlap region is inset by endExt on each side).
 // Returns shapes unchanged if vc has zero dimensions or there is no valid overlap.
-func PlaceViaCuts(shapes []Shape, a, b Shape, vc ViaConfig, cutLayer Layer, endExt int) []Shape {
+func PlaceViaCuts(shapes []Shape, a, b Shape, vc ViaConfig, cutLayer Layer, endExt Nm) []Shape {
 	if vc.CutW == 0 || vc.CutH == 0 {
 		return shapes
 	}
@@ -16,14 +16,14 @@ func PlaceViaCuts(shapes []Shape, a, b Shape, vc ViaConfig, cutLayer Layer, endE
 		return shapes
 	}
 	w, h := x1-x0, y1-y0
-	cols := max(1, (w+vc.SpaceX)/(vc.CutW+vc.SpaceX))
-	rows := max(1, (h+vc.SpaceY)/(vc.CutH+vc.SpaceY))
-	startX := (x0+x1)/2 - (cols*vc.CutW+(cols-1)*vc.SpaceX)/2
-	startY := (y0+y1)/2 - (rows*vc.CutH+(rows-1)*vc.SpaceY)/2
+	cols := max(1, int((w+vc.SpaceX)/(vc.CutW+vc.SpaceX)))
+	rows := max(1, int((h+vc.SpaceY)/(vc.CutH+vc.SpaceY)))
+	startX := (x0+x1)/2 - (Nm(cols)*vc.CutW+Nm(cols-1)*vc.SpaceX)/2
+	startY := (y0+y1)/2 - (Nm(rows)*vc.CutH+Nm(rows-1)*vc.SpaceY)/2
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
-			llx := startX + c*(vc.CutW+vc.SpaceX)
-			lly := startY + r*(vc.CutH+vc.SpaceY)
+			llx := startX + Nm(c)*(vc.CutW+vc.SpaceX)
+			lly := startY + Nm(r)*(vc.CutH+vc.SpaceY)
 			shapes = append(shapes, Shape{
 				LowerLeft:  Point{X: llx, Y: lly},
 				UpperRight: Point{X: llx + vc.CutW, Y: lly + vc.CutH},

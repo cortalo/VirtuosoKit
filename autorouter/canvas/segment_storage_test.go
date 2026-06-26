@@ -11,7 +11,7 @@ func newStore() *SegmentStorageImpl {
 	return NewSegmentStore(Point{0, 0}, Point{100, 100})
 }
 
-func seg(x1, y1, x2, y2, netID int) Segment {
+func seg(x1, y1, x2, y2 Nm, netID int) Segment {
 	return Segment{LowerLeft: Point{x1, y1}, UpperRight: Point{x2, y2}, NetID: netID}
 }
 

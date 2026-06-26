@@ -8,6 +8,7 @@ import (
 type Point = common.Point
 type Segment = common.Segment
 type TrackSegment = common.TrackSegment
+type Nm = common.Nm
 
 var (
 	ErrInvalidTrackID = errors.New("invalid m3 track ID")

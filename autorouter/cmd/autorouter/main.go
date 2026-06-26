@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,8 +106,8 @@ func buildCanvasInstances(instances []netlist.LayoutInstance, db *celldb.DB) []c
 				continue
 			}
 			shapes = append(shapes, common.Shape{
-				LowerLeft:  common.Point{X: m.LL[0], Y: m.LL[1]},
-				UpperRight: common.Point{X: m.UR[0], Y: m.UR[1]},
+				LowerLeft:  common.Point{X: common.Nm(m.LL[0]), Y: common.Nm(m.LL[1])},
+				UpperRight: common.Point{X: common.Nm(m.UR[0]), Y: common.Nm(m.UR[1])},
 				Layer:      layer,
 			})
 		}
@@ -116,7 +115,7 @@ func buildCanvasInstances(instances []netlist.LayoutInstance, db *celldb.DB) []c
 			continue
 		}
 		result = append(result, canvas.Instance{
-			XY:     common.Point{X: int(math.Round(inst.XY[0] * 1000)), Y: int(math.Round(inst.XY[1] * 1000))},
+			XY:     common.Point{X: common.Micron(inst.XY[0]).ToNm(), Y: common.Micron(inst.XY[1]).ToNm()},
 			Orient: orient,
 			Metals: shapes,
 		})
@@ -260,28 +259,28 @@ func main() {
 	var rc router.Canvas
 	switch *mode {
 	case "classic":
-		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
+		m3TrackCount := int((ur.Y - ll.Y) / common.Nm(*m3TrackWidth))
 		tlc := &canvas.TwoLayerCanvas{
 			LowerLeft:  ll,
 			UpperRight: ur,
 			M2Storage:  canvas.NewSegmentStore(ll, ur),
-			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
+			M3Storage:  canvas.NewTrackSegmentStorage(m3TrackCount, common.Nm(*m3TrackWidth)),
 		}
-		tlr := router.NewTwoLayerRouter(tlc, *m2Width, m2DRC, m3DRC)
+		tlr := router.NewTwoLayerRouter(tlc, common.Nm(*m2Width), m2DRC, m3DRC)
 		tlr.SetWidenNarrowPins(*widenNarrowPins)
 		c, r, rc = tlc, tlr, tlc
 		if *verbose {
 			fmt.Fprintf(os.Stderr, "mode: classic  m3-tracks=%d\n", m3TrackCount)
 		}
 	case "full-track":
-		m2TrackCount := (ur.X - ll.X) / *m2TrackWidth
-		m3TrackCount := (ur.Y - ll.Y) / *m3TrackWidth
+		m2TrackCount := int((ur.X - ll.X) / common.Nm(*m2TrackWidth))
+		m3TrackCount := int((ur.Y - ll.Y) / common.Nm(*m3TrackWidth))
 		canvasInsts := buildCanvasInstances(req.Layout.Instances, db)
 		dir := parseDir(*m2Dir)
 		ftc, err := canvas.NewFullTrackCanvas(
 			ll, ur,
-			canvas.NewTrackSegmentStorage(m2TrackCount, *m2TrackWidth),
-			canvas.NewTrackSegmentStorage(m3TrackCount, *m3TrackWidth),
+			canvas.NewTrackSegmentStorage(m2TrackCount, common.Nm(*m2TrackWidth)),
+			canvas.NewTrackSegmentStorage(m3TrackCount, common.Nm(*m3TrackWidth)),
 			dir,
 			canvasInsts,
 		)
@@ -308,7 +307,7 @@ func main() {
 
 	s := session.NewSession(c, r, nl, via12, via23, m2DRC, m3DRC)
 	if len(powerNets) > 0 {
-		pr := router.NewPowerRouter(rc, *m2Width, m2DRC, m3DRC)
+		pr := router.NewPowerRouter(rc, common.Nm(*m2Width), m2DRC, m3DRC)
 		pr.SetWidenNarrowPins(*widenNarrowPins)
 		s.SetPowerRouter(pr, powerNets...)
 		if *verbose {

@@ -17,8 +17,8 @@ func newFTSession(nets []*common.Net) *session.Session {
 	c := &canvas.FullTrackCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
-		M2Storage:  canvas.NewTrackSegmentStorage(10, 100),
-		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+		M2Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 		M2Dir:      common.Vertical,
 	}
 	r := router.NewFullTrackRouter(c, common.Vertical, common.NoDRC{}, common.NoDRC{})
@@ -29,7 +29,7 @@ func newFTSession(nets []*common.Net) *session.Session {
 func ftTrackID(res session.NetResult, trackWidth int) int {
 	for _, seg := range res.Shapes {
 		if seg.Layer == common.M3 {
-			return seg.LowerLeft.Y / trackWidth
+			return int(seg.LowerLeft.Y / common.Nm(trackWidth))
 		}
 	}
 	panic("no M3 segment in result")
@@ -129,8 +129,8 @@ func TestFTIntegration_InstanceMetal_BlocksM3Track(t *testing.T) {
 	c, err := canvas.NewFullTrackCanvas(
 		common.Point{X: 0, Y: 0},
 		common.Point{X: 1000, Y: 1000},
-		canvas.NewTrackSegmentStorage(10, 100),
-		canvas.NewTrackSegmentStorage(10, 100),
+		canvas.NewTrackSegmentStorage(10, common.Nm(100)),
+		canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 		common.Vertical,
 		[]canvas.Instance{inst},
 	)
@@ -161,15 +161,15 @@ func TestFTIntegration_SecondNet_NoPath_WhenAllTracksBlocked(t *testing.T) {
 	c := &canvas.FullTrackCanvas{
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
-		M2Storage:  canvas.NewTrackSegmentStorage(10, 100),
-		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+		M2Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 		M2Dir:      common.Vertical,
 	}
 	// Block all 10 M3 tracks with netID=99.
 	for i := 0; i < 10; i++ {
 		require.NoError(t, c.Occupy(common.Segment{
-			LowerLeft:    common.Point{X: 0, Y: i * 100},
-			UpperRight:   common.Point{X: 1000, Y: (i + 1) * 100},
+			LowerLeft:    common.Point{X: 0, Y: common.Nm(i * 100)},
+			UpperRight:   common.Point{X: 1000, Y: common.Nm((i + 1) * 100)},
 			NetID:        99,
 			Layer:        common.M3,
 			CanvasOrigin: common.Point{X: 0, Y: 0},

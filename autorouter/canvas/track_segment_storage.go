@@ -1,18 +1,20 @@
 package canvas
 
+import "autorouter/common"
+
 type TrackSegmentStorage interface {
 	IsPassible(seg TrackSegment) bool
 	IsOccupied(seg TrackSegment) bool
 	Occupy(seg TrackSegment) error
-	GetTrackWidth() int
+	GetTrackWidth() common.Nm
 }
 
 type TrackSegmentStorageImpl struct {
-	TrackWidth int
+	TrackWidth common.Nm
 	Tracks     []Track
 }
 
-func NewTrackSegmentStorage(trackCount, trackWidth int) *TrackSegmentStorageImpl {
+func NewTrackSegmentStorage(trackCount int, trackWidth common.Nm) *TrackSegmentStorageImpl {
 	tracks := make([]Track, trackCount)
 	for i := range tracks {
 		tracks[i] = NewTrackImpl()
@@ -44,6 +46,6 @@ func (tss *TrackSegmentStorageImpl) Occupy(seg TrackSegment) error {
 	return tss.Tracks[seg.TrackID].Occupy(seg.NetID, seg.Start, seg.End)
 }
 
-func (tss *TrackSegmentStorageImpl) GetTrackWidth() int {
+func (tss *TrackSegmentStorageImpl) GetTrackWidth() common.Nm {
 	return tss.TrackWidth
 }

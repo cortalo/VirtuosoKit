@@ -71,7 +71,7 @@ func (c *TwoLayerCanvas) dirForLayer(layer common.Layer) (common.Direction, erro
 	}
 }
 
-func (c *TwoLayerCanvas) trackWidth(layer common.Layer) (int, error) {
+func (c *TwoLayerCanvas) trackWidth(layer common.Layer) (common.Nm, error) {
 	switch layer {
 	case common.M3:
 		return c.M3Storage.GetTrackWidth(), nil
@@ -81,15 +81,15 @@ func (c *TwoLayerCanvas) trackWidth(layer common.Layer) (int, error) {
 	}
 }
 
-func (c *TwoLayerCanvas) NewTrack(layer common.Layer, trackID, start, end, netID int) (TrackSegment, error) {
+func (c *TwoLayerCanvas) NewTrack(layer common.Layer, trackID, netID int, start, end common.Nm) (TrackSegment, error) {
 	tw := lo.Must(c.trackWidth(layer))
 	dir := lo.Must(c.dirForLayer(layer))
 	var numTracks int
 	switch dir {
 	case common.Horizontal:
-		numTracks = (c.UpperRight.Y - c.LowerLeft.Y) / tw
+		numTracks = int((c.UpperRight.Y - c.LowerLeft.Y) / tw)
 	case common.Vertical:
-		numTracks = (c.UpperRight.X - c.LowerLeft.X) / tw
+		numTracks = int((c.UpperRight.X - c.LowerLeft.X) / tw)
 	default:
 		panic(ErrUnknownLayer)
 	}
@@ -128,7 +128,7 @@ func (c *TwoLayerCanvas) GetUpperRight() Point {
 	return c.UpperRight
 }
 
-func (c *TwoLayerCanvas) GetTrackWidth(layer common.Layer) int {
+func (c *TwoLayerCanvas) GetTrackWidth(layer common.Layer) common.Nm {
 	if layer != common.M3 {
 		panic(ErrUnknownLayer)
 	}

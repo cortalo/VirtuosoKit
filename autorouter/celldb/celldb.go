@@ -68,7 +68,7 @@ func (db *DB) QueryMetals(lib, cellName string) ([]Metal, error) {
 	return c.Metals, nil
 }
 
-func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh int, layer common.Layer, err error) {
+func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh common.Nm, layer common.Layer, err error) {
 	cells, ok := db.libs[lib]
 	if !ok {
 		err = fmt.Errorf("%w: %s", ErrLibNotFound, lib)
@@ -81,7 +81,7 @@ func (db *DB) Query(lib, cellName, pinName string) (xLow, xHigh, yLow, yHigh int
 	}
 	for _, p := range c.Pins {
 		if p.Name == pinName {
-			xLow, xHigh, yLow, yHigh = p.LL[0], p.UR[0], p.LL[1], p.UR[1]
+			xLow, xHigh, yLow, yHigh = common.Nm(p.LL[0]), common.Nm(p.UR[0]), common.Nm(p.LL[1]), common.Nm(p.UR[1])
 			if p.Layer == "" {
 				layer = common.M1
 			} else {

@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"autorouter/common"
 	"errors"
 
 	"github.com/google/btree"
@@ -9,13 +10,14 @@ import (
 var ErrOverlap = errors.New("segment overlaps existing occupation")
 
 type Track interface {
-	IsPassible(netID, start, end int) bool
-	IsOccupied(start, end int) bool
-	Occupy(netID, start, end int) error
+	IsPassible(netID int, start, end common.Nm) bool
+	IsOccupied(start, end common.Nm) bool
+	Occupy(netID int, start, end common.Nm) error
 }
 
 type interval struct {
-	start, end, netID int
+	start, end common.Nm
+	netID      int
 }
 type TrackImpl struct {
 	occupied *btree.BTreeG[interval]
@@ -29,7 +31,7 @@ func NewTrackImpl() *TrackImpl {
 	}
 }
 
-func (t *TrackImpl) IsPassible(netID, start, end int) bool {
+func (t *TrackImpl) IsPassible(netID int, start, end common.Nm) bool {
 	passable := true
 	// start from the first interval whose start >= start
 	t.occupied.AscendGreaterOrEqual(interval{start: start}, func(iv interval) bool {
@@ -54,7 +56,7 @@ func (t *TrackImpl) IsPassible(netID, start, end int) bool {
 
 }
 
-func (t *TrackImpl) IsOccupied(start, end int) bool {
+func (t *TrackImpl) IsOccupied(start, end common.Nm) bool {
 	occupied := false
 	t.occupied.AscendGreaterOrEqual(interval{start: start}, func(iv interval) bool {
 		if iv.start >= end {
@@ -74,7 +76,7 @@ func (t *TrackImpl) IsOccupied(start, end int) bool {
 	return occupied
 }
 
-func (t *TrackImpl) Occupy(netID, start, end int) error {
+func (t *TrackImpl) Occupy(netID int, start, end common.Nm) error {
 	if !t.IsPassible(netID, start, end) {
 		return ErrOverlap
 	}

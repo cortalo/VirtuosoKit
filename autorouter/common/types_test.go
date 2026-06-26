@@ -56,12 +56,12 @@ func TestToTrack_HorizontalM3_CorrectTrackID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 3, ts.TrackID)
-	assert.Equal(t, 50, ts.Start)
-	assert.Equal(t, 500, ts.End)
+	assert.Equal(t, common.Nm(50), ts.Start)
+	assert.Equal(t, common.Nm(500), ts.End)
 	assert.Equal(t, 1, ts.NetID)
 	assert.Equal(t, common.Horizontal, ts.Dir)
 	assert.Equal(t, common.Point{X: 0, Y: 0}, ts.CanvasOrigin)
-	assert.Equal(t, 100, ts.Width)
+	assert.Equal(t, common.Nm(100), ts.Width)
 }
 
 func TestToTrack_VerticalM2_CorrectTrackID(t *testing.T) {
@@ -79,8 +79,8 @@ func TestToTrack_VerticalM2_CorrectTrackID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, ts.TrackID) // X offset=200, 200/100=2
-	assert.Equal(t, 50, ts.Start)
-	assert.Equal(t, 600, ts.End)
+	assert.Equal(t, common.Nm(50), ts.Start)
+	assert.Equal(t, common.Nm(600), ts.End)
 	assert.Equal(t, common.Vertical, ts.Dir)
 }
 
@@ -124,7 +124,7 @@ func TestToTrack_NegativeOffset_ReturnsMisalignedError(t *testing.T) {
 
 func TestToSeg_HorizontalM3_CorrectCoordinates(t *testing.T) {
 	c := testCanvas()
-	ts, err := c.NewTrack(common.M3, 5, 100, 600, 2)
+	ts, err := c.NewTrack(common.M3, 5, 2, 100, 600)
 	require.NoError(t, err)
 
 	seg := ts.ToSeg()

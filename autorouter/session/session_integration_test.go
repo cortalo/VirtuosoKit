@@ -16,7 +16,7 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1000}),
-		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	nl := &common.Netlist{Nets: nets}
@@ -27,14 +27,14 @@ func newIntegrationSession(nets []*common.Net) *session.Session {
 func trackIDFromResult(res session.NetResult, trackWidth int) int {
 	for _, seg := range res.Shapes {
 		if seg.Layer == common.M3 {
-			return seg.LowerLeft.Y / trackWidth
+			return int(seg.LowerLeft.Y / common.Nm(trackWidth))
 		}
 	}
 	panic("no M3 segment in result")
 }
 
 func pin(x, y int) common.RoutingPin {
-	return common.RoutingPin{XLow: x, YLow: y, YHigh: y}
+	return common.RoutingPin{XLow: common.Nm(x), YLow: common.Nm(y), YHigh: common.Nm(y)}
 }
 
 func TestIntegration_SingleNet_RouteSucceeds(t *testing.T) {
@@ -103,7 +103,7 @@ func TestIntegration_PinBBoxExtension_M2OverlapPanic(t *testing.T) {
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1200},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1200}),
-		M3Storage:  canvas.NewTrackSegmentStorage(12, 100),
+		M3Storage:  canvas.NewTrackSegmentStorage(12, common.Nm(100)),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	nets := []*common.Net{
@@ -122,7 +122,7 @@ func TestIntegration_PinBBoxExtension_M2OverlapPanic(t *testing.T) {
 }
 
 // hasM2Bus reports whether shapes contains the full-height M2 bus produced by PowerRouter.
-func hasM2Bus(shapes []session.Shape, canvasHeight int) bool {
+func hasM2Bus(shapes []session.Shape, canvasHeight common.Nm) bool {
 	for _, sh := range shapes {
 		if sh.Layer == common.M2 && sh.LowerLeft.X == 0 && sh.UpperRight.Y == canvasHeight {
 			return true
@@ -136,7 +136,7 @@ func newIntegrationSessionWithPower(nets []*common.Net, powerNetNames ...string)
 		LowerLeft:  common.Point{X: 0, Y: 0},
 		UpperRight: common.Point{X: 1000, Y: 1000},
 		M2Storage:  canvas.NewSegmentStore(common.Point{X: 0, Y: 0}, common.Point{X: 1000, Y: 1000}),
-		M3Storage:  canvas.NewTrackSegmentStorage(10, 100),
+		M3Storage:  canvas.NewTrackSegmentStorage(10, common.Nm(100)),
 	}
 	r := router.NewTwoLayerRouter(c, 1, common.NoDRC{}, common.NoDRC{})
 	pr := router.NewPowerRouter(c, 1, common.NoDRC{}, common.NoDRC{})

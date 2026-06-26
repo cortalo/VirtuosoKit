@@ -12,14 +12,14 @@ import (
 // spaceDRC is a NoDRC variant that adds a configurable minSpace.
 type spaceDRC struct {
 	common.NoDRC
-	space int
+	space common.Nm
 }
 
-func (d spaceDRC) ApplyMinSpaceExtension(lo, hi int) (int, int) {
+func (d spaceDRC) ApplyMinSpaceExtension(lo, hi common.Nm) (common.Nm, common.Nm) {
 	return lo - d.space, hi + d.space
 }
 
-func m2Stub(xLow, xHigh, yLow, yHigh int) Segment {
+func m2Stub(xLow, xHigh, yLow, yHigh common.Nm) Segment {
 	return Segment{
 		Layer:      common.M2,
 		LowerLeft:  Point{X: xLow, Y: yLow},
@@ -74,11 +74,11 @@ func TestGroupByProximity_SortsByX_PreservesOriginalOrder(t *testing.T) {
 	require.Len(t, groups, 2)
 	lo0, _ := groups[0].xSpan()
 	lo1, _ := groups[1].xSpan()
-	assert.Equal(t, 0, lo0, "first group must start at X=0 after sorting")
-	assert.Equal(t, 100, lo1)
+	assert.Equal(t, common.Nm(0), lo0, "first group must start at X=0 after sorting")
+	assert.Equal(t, common.Nm(100), lo1)
 	// original slice order must be untouched
-	assert.Equal(t, 100, stubs[0].LowerLeft.X)
-	assert.Equal(t, 0, stubs[1].LowerLeft.X)
+	assert.Equal(t, common.Nm(100), stubs[0].LowerLeft.X)
+	assert.Equal(t, common.Nm(0), stubs[1].LowerLeft.X)
 }
 
 func TestGroupByProximity_MarkNoViaUp_MutatesOriginalSlice(t *testing.T) {
@@ -166,10 +166,10 @@ func TestPostProcessStubs_SingleGroup_DropsM3AndAddsFiller(t *testing.T) {
 	// Filler: M2 spanning the full group X range at M3 Y level, NoViaDown=true.
 	filler := result[2]
 	assert.Equal(t, common.M2, filler.Layer)
-	assert.Equal(t, 0, filler.LowerLeft.X)
-	assert.Equal(t, 25, filler.UpperRight.X)
-	assert.Equal(t, 100, filler.LowerLeft.Y)
-	assert.Equal(t, 200, filler.UpperRight.Y)
+	assert.Equal(t, common.Nm(0), filler.LowerLeft.X)
+	assert.Equal(t, common.Nm(25), filler.UpperRight.X)
+	assert.Equal(t, common.Nm(100), filler.LowerLeft.Y)
+	assert.Equal(t, common.Nm(200), filler.UpperRight.Y)
 	assert.True(t, filler.NoViaDown)
 	assert.False(t, filler.NoViaUp, "filler must still be able to via up to M3 when M3 is present")
 }

@@ -39,28 +39,28 @@ func (r *FullTrackRouter) Route(pins []RoutingPin, netID int) ([]Segment, error)
 	}
 
 	// midTrack is computed along the M3 direction's axis.
-	var midCoord, originAlong, upperAlong int
+	var midCoord, originAlong, upperAlong common.Nm
 	upperRight := r.canvas.GetUpperRight()
 	switch m3Dir {
 	case common.Horizontal:
-		sum := 0
+		var sum common.Nm
 		for _, pin := range pins {
 			sum += pin.YLow
 		}
-		midCoord = sum / len(pins)
+		midCoord = sum / common.Nm(len(pins))
 		originAlong, upperAlong = origin.Y, upperRight.Y
 	case common.Vertical:
-		sum := 0
+		var sum common.Nm
 		for _, pin := range pins {
 			sum += pin.XLow
 		}
-		midCoord = sum / len(pins)
+		midCoord = sum / common.Nm(len(pins))
 		originAlong, upperAlong = origin.X, upperRight.X
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
 	}
-	midTrack := (midCoord - originAlong) / m3tw
-	maxTrack := (upperAlong-originAlong)/m3tw - 1
+	midTrack := int((midCoord - originAlong) / m3tw)
+	maxTrack := int((upperAlong-originAlong)/m3tw) - 1
 
 	for delta := 0; (midTrack+delta <= maxTrack) || (midTrack-delta >= 0); delta++ {
 		if segs, ok := r.tryTrack(pins, netID, midTrack+delta, m2Candidates, origin, m2tw, m3tw, m3Dir); ok {
@@ -78,8 +78,8 @@ func (r *FullTrackRouter) Route(pins []RoutingPin, netID int) ([]Segment, error)
 // sortedM2Tracks returns all M2 track IDs that overlap the pin's cross-axis range,
 // sorted by distance from the pin center (closest first).
 // For M2=Vertical, the cross axis is X; for M2=Horizontal, the cross axis is Y.
-func sortedM2Tracks(pin RoutingPin, origin Point, m2tw int, m2Dir common.Direction) []int {
-	var crossLow, crossHigh, originCross int
+func sortedM2Tracks(pin RoutingPin, origin Point, m2tw common.Nm, m2Dir common.Direction) []int {
+	var crossLow, crossHigh, originCross common.Nm
 	switch m2Dir {
 	case common.Vertical:
 		crossLow, crossHigh, originCross = pin.XLow, pin.XHigh, origin.X
@@ -88,8 +88,8 @@ func sortedM2Tracks(pin RoutingPin, origin Point, m2tw int, m2Dir common.Directi
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
 	}
-	tMin := (crossLow - originCross) / m2tw
-	tMax := (crossHigh - originCross - 1) / m2tw
+	tMin := int((crossLow - originCross) / m2tw)
+	tMax := int((crossHigh - originCross - 1) / m2tw)
 	if tMax < tMin {
 		return nil
 	}
@@ -99,8 +99,8 @@ func sortedM2Tracks(pin RoutingPin, origin Point, m2tw int, m2Dir common.Directi
 	}
 	center := crossLow + crossHigh - 2*originCross
 	sort.Slice(tracks, func(i, j int) bool {
-		di := 2*tracks[i]*m2tw + m2tw - center
-		dj := 2*tracks[j]*m2tw + m2tw - center
+		di := common.Nm(2*tracks[i])*m2tw + m2tw - center
+		dj := common.Nm(2*tracks[j])*m2tw + m2tw - center
 		return max(di, -di) < max(dj, -dj)
 	})
 	return tracks
@@ -109,17 +109,17 @@ func sortedM2Tracks(pin RoutingPin, origin Point, m2tw int, m2Dir common.Directi
 func (r *FullTrackRouter) tryTrack(
 	pins []RoutingPin, netID, m3TrackID int,
 	m2Candidates [][]int,
-	origin Point, m2tw, m3tw int,
+	origin Point, m2tw, m3tw common.Nm,
 	m3Dir common.Direction,
 ) ([]Segment, bool) {
 	// m3Lower/m3Upper are coordinates along M3's perpendicular axis (which is M2's axis).
-	var m3Lower, m3Upper int
+	var m3Lower, m3Upper common.Nm
 	switch m3Dir {
 	case common.Horizontal:
-		m3Lower = origin.Y + m3TrackID*m3tw
+		m3Lower = origin.Y + common.Nm(m3TrackID)*m3tw
 		m3Upper = m3Lower + m3tw
 	case common.Vertical:
-		m3Lower = origin.X + m3TrackID*m3tw
+		m3Lower = origin.X + common.Nm(m3TrackID)*m3tw
 		m3Upper = m3Lower + m3tw
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
@@ -151,7 +151,7 @@ func (r *FullTrackRouter) tryTrack(
 			}
 			// M2 runs along its direction; its start/end are the "along-axis" pin extents
 			// merged with the M3 band to ensure connectivity.
-			var pinAlong0, pinAlong1 int
+			var pinAlong0, pinAlong1 common.Nm
 			switch r.m2Dir {
 			case common.Vertical:
 				pinAlong0, pinAlong1 = pin.YLow, pin.YHigh
@@ -160,7 +160,7 @@ func (r *FullTrackRouter) tryTrack(
 			case common.UnknownDirection:
 				panic(common.ErrUnknownDirection)
 			}
-			var m2Start, m2End int
+			var m2Start, m2End common.Nm
 			if pin.Layer == common.M2 {
 				extStart, extEnd := r.m2DRC.ApplyEndExtension(m3Lower, m3Upper)
 				m2Start = min(extStart, pinAlong0)
@@ -169,7 +169,7 @@ func (r *FullTrackRouter) tryTrack(
 				rangeStart, rangeEnd := min(pinAlong0, m3Lower), max(pinAlong1, m3Upper)
 				m2Start, m2End = r.m2DRC.ApplyEndExtension(rangeStart, rangeEnd)
 			}
-			m2, err := r.canvas.NewTrack(common.M2, t, m2Start, m2End, netID)
+			m2, err := r.canvas.NewTrack(common.M2, t, netID, m2Start, m2End)
 			if err != nil {
 				continue
 			}
@@ -199,9 +199,9 @@ func (r *FullTrackRouter) tryTrack(
 
 	if minM2Track == maxM2Track {
 		result := make([]Segment, len(pins))
-		connStart, connEnd := 0, 0
+		var connStart, connEnd common.Nm
 		for i, pin := range pins {
-			var plo, phi int
+			var plo, phi common.Nm
 			switch r.m2Dir {
 			case common.Vertical:
 				plo, phi = pin.YLow, pin.YHigh
@@ -216,13 +216,13 @@ func (r *FullTrackRouter) tryTrack(
 				connStart = min(connStart, plo)
 				connEnd = max(connEnd, phi)
 			}
-			var m2Start, m2End int
+			var m2Start, m2End common.Nm
 			if pin.Layer == common.M2 {
 				m2Start, m2End = plo, phi
 			} else {
 				m2Start, m2End = r.m2DRC.ApplyEndExtension(plo, phi)
 			}
-			m2, err := r.canvas.NewTrack(common.M2, minM2Track, m2Start, m2End, netID)
+			m2, err := r.canvas.NewTrack(common.M2, minM2Track, netID, m2Start, m2End)
 			if err != nil {
 				continue
 			}
@@ -236,24 +236,24 @@ func (r *FullTrackRouter) tryTrack(
 			}
 			result[i] = m2.ToSeg()
 		}
-		conn, err := r.canvas.NewTrack(common.M2, minM2Track, connStart, connEnd, netID)
+		conn, err := r.canvas.NewTrack(common.M2, minM2Track, netID, connStart, connEnd)
 		if err != nil {
 			return nil, false
 		}
 		return append(result, conn.ToSeg()), true
 	}
 
-	var m3Start, m3End int
+	var m3Start, m3End common.Nm
 	switch m3Dir {
 	case common.Horizontal:
-		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.X+minM2Track*m2tw, origin.X+(maxM2Track+1)*m2tw)
+		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.X+common.Nm(minM2Track)*m2tw, origin.X+common.Nm(maxM2Track+1)*m2tw)
 	case common.Vertical:
-		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.Y+minM2Track*m2tw, origin.Y+(maxM2Track+1)*m2tw)
+		m3Start, m3End = r.m3DRC.ApplyEndExtension(origin.Y+common.Nm(minM2Track)*m2tw, origin.Y+common.Nm(maxM2Track+1)*m2tw)
 	case common.UnknownDirection:
 		panic(common.ErrUnknownDirection)
 	}
 
-	m3, err := r.canvas.NewTrack(common.M3, m3TrackID, m3Start, m3End, netID)
+	m3, err := r.canvas.NewTrack(common.M3, m3TrackID, netID, m3Start, m3End)
 	if err != nil {
 		return nil, false
 	}

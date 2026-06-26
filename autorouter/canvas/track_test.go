@@ -185,8 +185,8 @@ func TestTrack_Occupy_SameNetID_ExtendLeft(t *testing.T) {
 	count := 0
 	track.occupied.Ascend(func(iv interval) bool {
 		count++
-		assert.Equal(t, 10, iv.start)
-		assert.Equal(t, 30, iv.end)
+		assert.Equal(t, Nm(10), iv.start)
+		assert.Equal(t, Nm(30), iv.end)
 		return true
 	})
 	assert.Equal(t, 1, count)
@@ -200,8 +200,8 @@ func TestTrack_Occupy_SameNetID_ExtendRight(t *testing.T) {
 	count := 0
 	track.occupied.Ascend(func(iv interval) bool {
 		count++
-		assert.Equal(t, 10, iv.start)
-		assert.Equal(t, 30, iv.end)
+		assert.Equal(t, Nm(10), iv.start)
+		assert.Equal(t, Nm(30), iv.end)
 		return true
 	})
 	assert.Equal(t, 1, count)
