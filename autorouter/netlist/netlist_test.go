@@ -190,23 +190,39 @@ func TestSchematicFilter_IncludeNets_OnlyKeepsListedNets(t *testing.T) {
 			"VDD":  {"I0.VDD", "I1.VDD"},
 		},
 	}
-	got := s.Filter([]string{"net1"}, nil, nil, nil)
+	got, err := s.Filter([]string{"net1"}, nil, nil, nil)
+	require.NoError(t, err)
 	assert.Len(t, got.Nets, 1)
 	assert.Contains(t, got.Nets, "net1")
 }
 
-func TestSchematicFilter_IncludeNets_IgnoreNetsHasNoEffect(t *testing.T) {
-	// When includeNets is set, ignoreNets is completely bypassed —
-	// even if a net appears in both lists, it is kept.
+func TestSchematicFilter_IncludeAndIgnoreBothSet_ReturnsError(t *testing.T) {
 	s := Schematic{
-		Nets: map[string][]string{
-			"net1": {"I0.A", "I1.B"},
-			"net2": {"I1.C", "I2.D"},
-		},
+		Nets: map[string][]string{"net1": {"I0.A", "I1.B"}},
 	}
-	got := s.Filter([]string{"net1"}, []string{"net1"}, nil, nil)
-	assert.Len(t, got.Nets, 1)
-	assert.Contains(t, got.Nets, "net1")
+	_, err := s.Filter([]string{"net1"}, []string{"net2"}, nil, nil)
+	assert.Error(t, err)
+}
+
+func TestSchematicFilter_MalformedInstPin_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name    string
+		instPin string
+	}{
+		{"no dot", "nodot"},
+		{"multiple dots", "I0.A.B"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := Schematic{
+				Nets: map[string][]string{
+					"net1": {"I0.A", tc.instPin},
+				},
+			}
+			_, err := s.Filter(nil, nil, nil, nil)
+			assert.Error(t, err)
+		})
+	}
 }
 
 // TestBuildNets_PinNotFound_ReturnsError: pin absent from db → error.

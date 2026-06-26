@@ -173,7 +173,10 @@ func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB,
 	if err != nil {
 		return
 	}
-	schematic = schematic.Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets)
+	schematic, err = schematic.Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets)
+	if err != nil {
+		return
+	}
 	layout := rawLayout.Index()
 
 	nets, err := buildNets(layout, schematic, db, minOverlapLibs, includePortNets)

@@ -3,9 +3,12 @@ package netlist
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 var busRangeRE = regexp.MustCompile(`^(.*)<(\d+):(\d+)>$`)
@@ -105,43 +108,58 @@ func (r RawSchematic) Expand() (Schematic, error) {
 // (lib, net) pair is in ignoreLibNets, are removed from their net's connection
 // list. Nets in s.Pins (top-level ports) are kept with >= 1 connection; all
 // other nets require >= 2 connections to be kept.
-func (s Schematic) Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets []string) Schematic {
-	includeNetsSet := toSet(includeNets)
-	ignoreNetsSet := toSet(ignoreNets)
+func (s Schematic) Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets []string) (Schematic, error) {
 	ignoreLibsSet := toSet(ignoreLibs)
 	libNetsMap := parseLibNets(ignoreLibNets)
-	nets := make(map[string][]string, len(s.Nets))
-	for netName, instPins := range s.Nets {
-		if len(includeNetsSet) > 0 {
-			if _, keep := includeNetsSet[netName]; !keep {
-				continue
-			}
-		} else if _, skip := ignoreNetsSet[netName]; skip {
-			continue
-		}
-		var filtered []string
+
+	if len(includeNets) > 0 && len(ignoreNets) > 0 {
+		return Schematic{}, fmt.Errorf("netlist: includeNets and ignoreNets are mutually exclusive")
+	}
+
+	nets := maps.Clone(s.Nets)
+	if len(includeNets) > 0 {
+		nets = lo.PickByKeys(s.Nets, includeNets)
+	}
+	nets = lo.OmitByKeys(nets, ignoreNets)
+
+	// validate inst.pin format (must be exactly one dot).
+	for netName, instPins := range nets {
 		for _, ip := range instPins {
-			parts := strings.SplitN(ip, ".", 2)
-			if len(parts) != 2 {
-				continue
+			if strings.Count(ip, ".") != 1 {
+				return Schematic{}, fmt.Errorf("netlist: invalid inst.pin %q in net %q", ip, netName)
 			}
-			lib := s.Instances[parts[0]].Lib
-			if _, skip := ignoreLibsSet[lib]; skip {
-				continue
-			}
-			if libNets, ok := libNetsMap[lib]; ok {
-				if _, skip := libNets[netName]; skip {
-					continue
-				}
-			}
-			filtered = append(filtered, ip)
-		}
-		_, isPin := s.Pins[netName]
-		if len(filtered) >= 2 || (isPin && len(filtered) > 0) {
-			nets[netName] = filtered
 		}
 	}
-	return Schematic{Instances: s.Instances, Nets: nets, Pins: s.Pins}
+
+	// strip pins whose instance lib is ignored.
+	nets = lo.MapValues(nets, func(instPins []string, _ string) []string {
+		return lo.Filter(instPins, func(ip string, _ int) bool {
+			lib := s.Instances[strings.SplitN(ip, ".", 2)[0]].Lib
+			_, skip := ignoreLibsSet[lib]
+			return !skip
+		})
+	})
+
+	// strip pins matched by lib:net rules.
+	nets = lo.MapValues(nets, func(instPins []string, netName string) []string {
+		return lo.Filter(instPins, func(ip string, _ int) bool {
+			lib := s.Instances[strings.SplitN(ip, ".", 2)[0]].Lib
+			libNets, ok := libNetsMap[lib]
+			if !ok {
+				return true
+			}
+			_, skip := libNets[netName]
+			return !skip
+		})
+	})
+
+	// drop nets with too few remaining connections.
+	nets = lo.PickBy(nets, func(netName string, pins []string) bool {
+		_, isPin := s.Pins[netName]
+		return len(pins) >= 2 || (isPin && len(pins) > 0)
+	})
+
+	return Schematic{Instances: s.Instances, Nets: nets, Pins: s.Pins}, nil
 }
 
 // parseLibNets converts "lib:net" strings into a map[lib]StringSet.
