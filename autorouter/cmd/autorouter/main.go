@@ -144,6 +144,8 @@ func main() {
 	m2Width := flag.Int("m2-width", 100, "M2 wire width in nm (classic mode)")
 	m2TrackWidth := flag.Int("m2-track-width", 100, "M2 track width in nm (full-track mode)")
 	m2Dir := flag.String("m2-dir", "vertical", "M2 routing direction: vertical or horizontal (full-track mode)")
+	var nets ignoreNetFlag
+	flag.Var(&nets, "net", "net name to route (repeatable; when set, only these nets are routed and -ignore-net is ignored)")
 	var ignoreNets ignoreNetFlag
 	flag.Var(&ignoreNets, "ignore-net", "net name to skip routing (repeatable, e.g. -ignore-net VDD -ignore-net VSS)")
 	var ignoreLibs ignoreNetFlag
@@ -157,9 +159,9 @@ func main() {
 	processLib := flag.String("process-lib", "", "process library name for DRC rules lookup (e.g. tsmc18)")
 	widenNarrowPins := flag.Bool("widen-narrow-pins", false, "widen M1 pins narrower than m2-width to m2-width, centered on the pin (classic mode)")
 	innovus := flag.Bool("innovus", false, "write Verilog for Innovus instead of routing")
-	moduleName        := flag.String("module-name", "", "Verilog module name (required with -innovus)")
-	outputPath        := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
-	pinsOutput        := flag.String("pins-output", "", "absolute path for pin coordinates JSON file (required with -innovus)")
+	moduleName := flag.String("module-name", "", "Verilog module name (required with -innovus)")
+	outputPath := flag.String("output", "", "absolute path for Verilog output file (required with -innovus)")
+	pinsOutput := flag.String("pins-output", "", "absolute path for pin coordinates JSON file (required with -innovus)")
 	connectionsOutput := flag.String("connections-output", "", "absolute path for net connections JSON file (required with -innovus)")
 	flag.Parse()
 
@@ -211,7 +213,7 @@ func main() {
 	}
 
 	nl, err := netlist.BuildNetsFromData(req.Layout, req.RawSchematic, db,
-		[]string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets), *innovus)
+		[]string(nets), []string(ignoreNets), []string(ignoreLibs), []string(minOverlapLibs), []string(ignoreLibNets), *innovus)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: build nets: %v\n", err)
 		os.Exit(1)

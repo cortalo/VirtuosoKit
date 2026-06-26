@@ -180,7 +180,7 @@ func TestWriteVerilog_InvChain(t *testing.T) {
 		t.Fatalf("load files: %v", err)
 	}
 
-	nl, err := netlist.BuildNetsFromData(layout, schem, &emptyDB{}, []string{"VDD", "VSS"}, nil, nil, nil, true)
+	nl, err := netlist.BuildNetsFromData(layout, schem, &emptyDB{}, nil, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	if err != nil {
 		t.Fatalf("build nets: %v", err)
 	}

@@ -165,7 +165,7 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	layout := twoInstLayout("mylib", "mycell", [2]float64{1.0, 2.0}, [2]float64{3.0, 4.0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, nil, false)
 
 	require.NoError(t, err)
 	require.Len(t, nl.Nets, 1)
@@ -182,13 +182,40 @@ func TestBuildNets_NormalPin_TransformAndOffsetApplied(t *testing.T) {
 	assert.Equal(t, 4030, pins[1].YLow)
 }
 
+func TestSchematicFilter_IncludeNets_OnlyKeepsListedNets(t *testing.T) {
+	s := Schematic{
+		Nets: map[string][]string{
+			"net1": {"I0.A", "I1.B"},
+			"net2": {"I1.C", "I2.D"},
+			"VDD":  {"I0.VDD", "I1.VDD"},
+		},
+	}
+	got := s.Filter([]string{"net1"}, nil, nil, nil)
+	assert.Len(t, got.Nets, 1)
+	assert.Contains(t, got.Nets, "net1")
+}
+
+func TestSchematicFilter_IncludeNets_IgnoreNetsHasNoEffect(t *testing.T) {
+	// When includeNets is set, ignoreNets is completely bypassed —
+	// even if a net appears in both lists, it is kept.
+	s := Schematic{
+		Nets: map[string][]string{
+			"net1": {"I0.A", "I1.B"},
+			"net2": {"I1.C", "I2.D"},
+		},
+	}
+	got := s.Filter([]string{"net1"}, []string{"net1"}, nil, nil)
+	assert.Len(t, got.Nets, 1)
+	assert.Contains(t, got.Nets, "net1")
+}
+
 // TestBuildNets_PinNotFound_ReturnsError: pin absent from db → error.
 func TestBuildNets_PinNotFound_ReturnsError(t *testing.T) {
 	db := &stubDB{pins: map[string]stubPinData{}}
 	layout := twoInstLayout("mylib", "mycell", [2]float64{0, 0}, [2]float64{1, 0}, nil, nil)
 	schem := twoInstSchem("mylib", "A")
 
-	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, false)
+	_, err := BuildNetsFromData(layout, schem, db, nil, nil, nil, nil, nil, false)
 
 	assert.Error(t, err)
 }
@@ -249,7 +276,7 @@ func TestBuildNetsFromData_TerminalFallback(t *testing.T) {
 
 	db := &stubDB{pins: map[string]stubPinData{}} // empty → terminal fallback for all
 
-	nl, err := BuildNetsFromData(layout, schem, db, []string{"VDD", "VSS"}, nil, nil, nil, true)
+	nl, err := BuildNetsFromData(layout, schem, db, nil, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	require.NoError(t, err)
 
 	// ── layout pins (top-level ports) ────────────────────────────────────────

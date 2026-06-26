@@ -161,17 +161,19 @@ func buildPins(layout Layout, schematic Schematic, db PinDB, ignoreNets []string
 }
 
 // BuildNetsFromData builds a Netlist from already-parsed layout and schematic data.
-// Nets in ignoreNets and pins whose instance belongs to a lib in ignoreLibs are
-// skipped; a net with fewer than 2 remaining pins is dropped.
+// When includeNets is non-empty only those nets are routed and ignoreNets is ignored.
+// When includeNets is empty, nets in ignoreNets are skipped.
+// Pins whose instance belongs to a lib in ignoreLibs are skipped; a net with
+// fewer than 2 remaining pins is dropped.
 // Pins whose instance lib is in minOverlapLibs have RoutingPin.MinOverlap set to true.
 // ignoreLibNets is a list of "lib:net" pairs: pins of those nets are skipped only
 // when the pin's instance lib matches.
-func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string, includePortNets bool) (nl *common.Netlist, err error) {
+func BuildNetsFromData(rawLayout RawLayout, rawSchematic RawSchematic, db PinDB, includeNets, ignoreNets, ignoreLibs, minOverlapLibs, ignoreLibNets []string, includePortNets bool) (nl *common.Netlist, err error) {
 	schematic, err := rawSchematic.Expand()
 	if err != nil {
 		return
 	}
-	schematic = schematic.Filter(ignoreNets, ignoreLibs, ignoreLibNets)
+	schematic = schematic.Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets)
 	layout := rawLayout.Index()
 
 	nets, err := buildNets(layout, schematic, db, minOverlapLibs, includePortNets)

@@ -24,7 +24,7 @@ func TestWritePinsJSON_InvChain(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nl, err := netlist.BuildNetsFromData(layout, schem, &emptyDB{}, []string{"VDD", "VSS"}, nil, nil, nil, true)
+	nl, err := netlist.BuildNetsFromData(layout, schem, &emptyDB{}, nil, []string{"VDD", "VSS"}, nil, nil, nil, true)
 	require.NoError(t, err)
 
 	data, err := writePinsJSON(nl)

@@ -99,18 +99,24 @@ func (r RawSchematic) Expand() (Schematic, error) {
 }
 
 // Filter returns a new Schematic with excluded nets and inst.pins removed.
-// Nets listed in ignoreNets are dropped entirely. Individual inst.pins whose
-// instance lib is in ignoreLibs, or whose (lib, net) pair is in ignoreLibNets,
-// are removed from their net's connection list.
-// Nets in s.Pins (top-level ports) are kept with >= 1 connection; all other
-// nets require >= 2 connections to be kept.
-func (s Schematic) Filter(ignoreNets, ignoreLibs, ignoreLibNets []string) Schematic {
+// When includeNets is non-empty only those nets are kept and ignoreNets is
+// ignored entirely. When includeNets is empty, nets listed in ignoreNets are
+// dropped. Individual inst.pins whose instance lib is in ignoreLibs, or whose
+// (lib, net) pair is in ignoreLibNets, are removed from their net's connection
+// list. Nets in s.Pins (top-level ports) are kept with >= 1 connection; all
+// other nets require >= 2 connections to be kept.
+func (s Schematic) Filter(includeNets, ignoreNets, ignoreLibs, ignoreLibNets []string) Schematic {
+	includeNetsSet := toSet(includeNets)
 	ignoreNetsSet := toSet(ignoreNets)
 	ignoreLibsSet := toSet(ignoreLibs)
 	libNetsMap := parseLibNets(ignoreLibNets)
 	nets := make(map[string][]string, len(s.Nets))
 	for netName, instPins := range s.Nets {
-		if _, skip := ignoreNetsSet[netName]; skip {
+		if len(includeNetsSet) > 0 {
+			if _, keep := includeNetsSet[netName]; !keep {
+				continue
+			}
+		} else if _, skip := ignoreNetsSet[netName]; skip {
 			continue
 		}
 		var filtered []string
