@@ -167,3 +167,29 @@ python pnr.py <lib> <cell> \
     --m2-width <NM> \
     --drc --lvs
 ```
+
+### CLI
+
+`cli.py` is a growing, subcommand-based tool for interacting with a live
+Virtuoso session (session/history auto-detected from open windows). Backed
+by `utils/waveform.py`. Currently supports:
+
+```bash
+# Plot VT("/clk_out") from the currently open Maestro results, e.g. after
+# a transient run in ADE Assembler
+python cli.py plot clk_out
+
+# Any Calculator/OCEAN expression works too
+python cli.py plot 'cross(VT("/fref") 0.5 1 "rising" t "time" nil)'
+
+# Override auto-detected session/history, select a different analysis
+python cli.py plot vout --analysis ac --history Interactive.1 --session fnxSession1
+```
+
+Requires the embedded `virtuoso-bridge-lite` submodule to expose
+`client.maestro.*` — if it's pinned to an older commit without it, point
+`PYTHONPATH` at a newer checkout instead:
+
+```bash
+PYTHONPATH=/path/to/newer/virtuoso-bridge-lite/src python cli.py plot clk_out
+```
