@@ -133,3 +133,124 @@ def plot_signal(
     plt.title(f"{signal} vs {'time' if analysis == 'tran' else analysis}")
     plt.tight_layout()
     plt.show()
+
+
+def get_clk_crossings(
+    signal: str = "clk_out",
+    threshold: float = 0.5,
+    edge: str = "rising",
+    *,
+    client: VirtuosoClient | None = None,
+    session: str | None = None,
+    history: str | None = None,
+    out_dir: str | Path | None = None,
+) -> list[float]:
+    """Threshold-crossing timestamps (seconds) of a clock-like signal.
+
+    Builds `cross(VT("/<signal>") <threshold> 1 "<edge>" t "time" nil)` --
+    edge number is still hardcoded to 1 for now. cross() returns one scalar
+    per edge, so ocnPrint dumps identical (time, time) pairs -- the parsed
+    "y" column is the crossing-time list returned here.
+    """
+    if edge not in ("rising", "falling"):
+        raise ValueError(f'edge must be "rising" or "falling", got {edge!r}')
+
+    expr = f'cross(VT("/{signal}") {threshold} 1 "{edge}"  t "time"  nil )'
+    _, crossings = get_signal_waveform(
+        expr, client=client, session=session, history=history,
+        analysis="tran", out_dir=out_dir,
+    )
+    return crossings
+
+
+def plot_clk_crossings(
+    signal: str = "clk_out",
+    threshold: float = 0.5,
+    edge: str = "rising",
+    *,
+    client: VirtuosoClient | None = None,
+    session: str | None = None,
+    history: str | None = None,
+    out_dir: str | Path | None = None,
+) -> None:
+    """Plot threshold-crossing times of a clock-like signal.
+
+    e.g. plot_clk_crossings("clk_out", 0.5, "falling")
+    """
+    crossings = get_clk_crossings(
+        signal, threshold, edge,
+        client=client, session=session, history=history, out_dir=out_dir,
+    )
+
+    import matplotlib.pyplot as plt
+
+    edges = list(range(1, len(crossings) + 1))
+    plt.figure(figsize=(8, 4))
+    plt.plot(edges, crossings, marker="o")
+    plt.xlabel(f"{edge} edge #")
+    plt.ylabel("crossing time (s)")
+    plt.title(f'{signal} {edge} ({threshold}V) crossing times')
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_phase_noise(
+    signal: str,
+    f_osc: float,
+    f_min: float,
+    f_max: float,
+    threshold: float = 0.5,
+    edge: str = "rising",
+    *,
+    client: VirtuosoClient | None = None,
+    session: str | None = None,
+    history: str | None = None,
+    out_dir: str | Path | None = None,
+) -> None:
+    """Estimate and plot single-sideband phase noise from clock crossings.
+
+    Pipeline: crossing timestamps -> jitter (vs an ideal f_osc clock) ->
+    phase (rad) -> FFT -> one-sided PSD -> /2 for SSB -> dBc/Hz, plotted
+    against offset frequency in [f_min, f_max] Hz on a log-x axis.
+
+    e.g. plot_phase_noise("clk_out", f_osc=1e9, f_min=1e3, f_max=100e6)
+    """
+    import numpy as np
+
+    crossings = get_clk_crossings(
+        signal, threshold, edge,
+        client=client, session=session, history=history, out_dir=out_dir,
+    )
+
+    t = np.asarray(crossings)
+    n = np.arange(len(t))
+    period = 1.0 / f_osc
+
+    t_ideal = t[0] + n * period
+    jitter = t - t_ideal                  # seconds
+    phase = jitter * 2 * np.pi * f_osc    # radians
+
+    num_samples = len(phase)
+    spectrum = np.fft.rfft(phase)
+    freqs = np.fft.rfftfreq(num_samples, d=period)
+
+    # One-sided PSD of phase (rad^2/Hz): sample rate is f_osc (one phase
+    # sample per ideal period).
+    psd = (np.abs(spectrum) ** 2) / (f_osc * num_samples)
+    psd[1:-1] *= 2
+
+    # SSB phase noise L(f) = S_phi(f) / 2.
+    phase_noise_dbc_hz = 10 * np.log10(psd / 2.0)
+
+    mask = (freqs >= f_min) & (freqs <= f_max)
+
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(8, 4))
+    plt.semilogx(freqs[mask], phase_noise_dbc_hz[mask])
+    plt.xlabel("offset frequency (Hz)")
+    plt.ylabel("phase noise (dBc/Hz)")
+    plt.title(f"{signal} phase noise")
+    plt.grid(True, which="both", ls=":")
+    plt.tight_layout()
+    plt.show()
