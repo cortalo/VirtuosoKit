@@ -8,6 +8,7 @@ Usage:
     python3 cli.py plot fref --analysis tran --history Interactive.1
     python3 cli.py phase_noise clk_out --f_osc 200e6
     python3 cli.py jitter clk_out --f_osc 200e6
+    python3 cli.py jitter clk_out --f_osc 200e6 --live --clip_from 10e-6 --clip_to 30e-6
 """
 
 import argparse
@@ -21,6 +22,7 @@ def cmd_plot(args: argparse.Namespace) -> int:
     client = VirtuosoClient.local(port=args.port, timeout=args.timeout)
     plot_signal(
         args.signal,
+        live=args.live,
         client=client,
         session=args.session,
         history=args.history,
@@ -39,6 +41,9 @@ def cmd_phase_noise(args: argparse.Namespace) -> int:
         args.f_max,
         args.threshold,
         args.edge,
+        clip_from=args.clip_from,
+        clip_to=args.clip_to,
+        live=args.live,
         client=client,
         session=args.session,
         history=args.history,
@@ -54,6 +59,9 @@ def cmd_jitter(args: argparse.Namespace) -> int:
         args.f_osc,
         args.threshold,
         args.edge,
+        clip_from=args.clip_from,
+        clip_to=args.clip_to,
+        live=args.live,
         client=client,
         session=args.session,
         history=args.history,
@@ -77,6 +85,9 @@ def parse_args() -> argparse.Namespace:
                               'expression (e.g. \'cross(VT("/fref") 0.5 1 "rising" t "time" nil)\')')
     plot_p.add_argument("--analysis", default="tran",
                          help="Analysis to select (default: tran)")
+    plot_p.add_argument("--live", action="store_true",
+                         help="Read from a still-running simulation instead of a "
+                              "finished history; signal must be wrapped in clip(...)")
     plot_p.add_argument("--history", default=None,
                          help="Explicit history, e.g. Interactive.1; auto-detected "
                               "from open windows if omitted")
@@ -100,6 +111,14 @@ def parse_args() -> argparse.Namespace:
                        help="Crossing threshold voltage (default: 0.5)")
     pn_p.add_argument("--edge", choices=["rising", "falling"], default="rising",
                        help="Crossing edge direction (default: rising)")
+    pn_p.add_argument("--clip_from", type=float, default=None, metavar="SEC",
+                       help="Start of time window to clip to before cross(); "
+                            "no clip applied unless both clip_from and clip_to are given")
+    pn_p.add_argument("--clip_to", type=float, default=None, metavar="SEC",
+                       help="End of time window to clip to before cross()")
+    pn_p.add_argument("--live", action="store_true",
+                       help="Read from a still-running simulation instead of a "
+                            "finished history; requires --clip_from and --clip_to")
     pn_p.add_argument("--history", default=None,
                        help="Explicit history, e.g. Interactive.1; auto-detected "
                             "from open windows if omitted")
@@ -119,6 +138,14 @@ def parse_args() -> argparse.Namespace:
                         help="Crossing threshold voltage (default: 0.5)")
     jit_p.add_argument("--edge", choices=["rising", "falling"], default="rising",
                         help="Crossing edge direction (default: rising)")
+    jit_p.add_argument("--clip_from", type=float, default=None, metavar="SEC",
+                        help="Start of time window to clip to before cross(); "
+                             "no clip applied unless both clip_from and clip_to are given")
+    jit_p.add_argument("--clip_to", type=float, default=None, metavar="SEC",
+                        help="End of time window to clip to before cross()")
+    jit_p.add_argument("--live", action="store_true",
+                        help="Read from a still-running simulation instead of a "
+                             "finished history; requires --clip_from and --clip_to")
     jit_p.add_argument("--history", default=None,
                         help="Explicit history, e.g. Interactive.1; auto-detected "
                              "from open windows if omitted")
