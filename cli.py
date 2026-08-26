@@ -7,13 +7,14 @@ Usage:
     python3 cli.py plot clk_out
     python3 cli.py plot fref --analysis tran --history Interactive.1
     python3 cli.py phase_noise clk_out --f_osc 200e6
+    python3 cli.py jitter clk_out --f_osc 200e6
 """
 
 import argparse
 
 from virtuoso_bridge import VirtuosoClient
 
-from utils.waveform import plot_phase_noise, plot_signal
+from utils.waveform import compute_rms_jitter, plot_phase_noise, plot_signal
 
 
 def cmd_plot(args: argparse.Namespace) -> int:
@@ -43,6 +44,22 @@ def cmd_phase_noise(args: argparse.Namespace) -> int:
         history=args.history,
         out_dir=args.out_dir,
     )
+    return 0
+
+
+def cmd_jitter(args: argparse.Namespace) -> int:
+    client = VirtuosoClient.local(port=args.port, timeout=args.timeout)
+    rms = compute_rms_jitter(
+        args.signal,
+        args.f_osc,
+        args.threshold,
+        args.edge,
+        client=client,
+        session=args.session,
+        history=args.history,
+        out_dir=args.out_dir,
+    )
+    print(f"RMS jitter: {rms:.6e} s ({rms * 1e12:.3f} ps)")
     return 0
 
 
@@ -92,6 +109,25 @@ def parse_args() -> argparse.Namespace:
                        help="Keep the raw OCEAN dump in this directory instead of "
                             "discarding it after parsing (default: discard)")
     pn_p.set_defaults(func=cmd_phase_noise)
+
+    jit_p = sub.add_parser("jitter",
+                            help="Print RMS timing jitter (s) from clock crossings, e.g. `jitter clk_out --f_osc 200e6`")
+    jit_p.add_argument("signal", help='Signal/net name, e.g. "clk_out"')
+    jit_p.add_argument("--f_osc", type=float, required=True, metavar="HZ",
+                        help="Nominal oscillator frequency in Hz")
+    jit_p.add_argument("--threshold", type=float, default=0.5,
+                        help="Crossing threshold voltage (default: 0.5)")
+    jit_p.add_argument("--edge", choices=["rising", "falling"], default="rising",
+                        help="Crossing edge direction (default: rising)")
+    jit_p.add_argument("--history", default=None,
+                        help="Explicit history, e.g. Interactive.1; auto-detected "
+                             "from open windows if omitted")
+    jit_p.add_argument("--session", default=None,
+                        help="Explicit Maestro session; auto-detected if omitted")
+    jit_p.add_argument("--out_dir", default=None,
+                        help="Keep the raw OCEAN dump in this directory instead of "
+                             "discarding it after parsing (default: discard)")
+    jit_p.set_defaults(func=cmd_jitter)
 
     return p.parse_args()
 

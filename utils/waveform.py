@@ -77,6 +77,7 @@ def get_signal_waveform(
     Returns (x, y) lists, e.g. (time, voltage).
     """
     client = client or VirtuosoClient.local(port=65432, timeout=120)
+    print("[waveform] connecting to Virtuoso bridge...")
     session = session or client.maestro.find_open_session()
     if not session:
         raise RuntimeError(
@@ -84,9 +85,11 @@ def get_signal_waveform(
             "finished simulation history first."
         )
     history = history or _autodetect_history(client)
+    print(f"[waveform] session={session} history={history}")
 
     expr = signal if "(" in signal else f'VT("/{signal}")'
     filename = f"{_safe_filename(signal)}.txt"
+    print(f"[waveform] exporting {expr!r} via ocnPrint (this is the slow step)...")
 
     if out_dir is None:
         with tempfile.TemporaryDirectory(prefix="vb_waveform_") as tmp:
@@ -94,6 +97,7 @@ def get_signal_waveform(
             client.maestro.export_waveform(
                 session, expr, str(raw_path), analysis=analysis, history=history,
             )
+            print(f"[waveform] export done, parsing {raw_path}...")
             xs, ys = _parse_ocean_dump(raw_path)
     else:
         out_dir = Path(out_dir)
@@ -102,10 +106,12 @@ def get_signal_waveform(
         client.maestro.export_waveform(
             session, expr, str(raw_path), analysis=analysis, history=history,
         )
+        print(f"[waveform] export done, parsing {raw_path}...")
         xs, ys = _parse_ocean_dump(raw_path)
 
     if not xs:
         raise RuntimeError(f"No numeric rows parsed from {filename}")
+    print(f"[waveform] parsed {len(xs)} points")
     return xs, ys
 
 
@@ -132,6 +138,7 @@ def plot_signal(
     plt.ylabel(signal)
     plt.title(f"{signal} vs {'time' if analysis == 'tran' else analysis}")
     plt.tight_layout()
+    print("[waveform] opening plot window...")
     plt.show()
 
 
@@ -191,14 +198,13 @@ def plot_clk_crossings(
     plt.ylabel("crossing time (s)")
     plt.title(f'{signal} {edge} ({threshold}V) crossing times')
     plt.tight_layout()
+    print("[waveform] opening plot window...")
     plt.show()
 
 
-def plot_phase_noise(
+def get_jitter(
     signal: str,
     f_osc: float,
-    f_min: float,
-    f_max: float,
     threshold: float = 0.5,
     edge: str = "rising",
     *,
@@ -206,14 +212,11 @@ def plot_phase_noise(
     session: str | None = None,
     history: str | None = None,
     out_dir: str | Path | None = None,
-) -> None:
-    """Estimate and plot single-sideband phase noise from clock crossings.
+):
+    """Per-edge timing jitter (seconds) vs. an ideal f_osc clock.
 
-    Pipeline: crossing timestamps -> jitter (vs an ideal f_osc clock) ->
-    phase (rad) -> FFT -> one-sided PSD -> /2 for SSB -> dBc/Hz, plotted
-    against offset frequency in [f_min, f_max] Hz on a log-x axis.
-
-    e.g. plot_phase_noise("clk_out", f_osc=1e9, f_min=1e3, f_max=100e6)
+    jitter[n] = crossing[n] - (crossing[0] + n / f_osc) -- referenced to the
+    first captured edge, so jitter[0] is always 0.
     """
     import numpy as np
 
@@ -225,11 +228,68 @@ def plot_phase_noise(
     t = np.asarray(crossings)
     n = np.arange(len(t))
     period = 1.0 / f_osc
-
     t_ideal = t[0] + n * period
-    jitter = t - t_ideal                  # seconds
+    return t - t_ideal
+
+
+def compute_rms_jitter(
+    signal: str,
+    f_osc: float,
+    threshold: float = 0.5,
+    edge: str = "rising",
+    *,
+    client: VirtuosoClient | None = None,
+    session: str | None = None,
+    history: str | None = None,
+    out_dir: str | Path | None = None,
+) -> float:
+    """RMS timing jitter (seconds): std() of get_jitter()."""
+    import numpy as np
+
+    jitter = get_jitter(
+        signal, f_osc, threshold, edge,
+        client=client, session=session, history=history, out_dir=out_dir,
+    )
+    return float(np.std(jitter))
+
+
+def plot_phase_noise(
+    signal: str,
+    f_osc: float,
+    f_min: float,
+    f_max: float,
+    threshold: float = 0.5,
+    edge: str = "rising",
+    *,
+    points_per_decade: float = 20,
+    client: VirtuosoClient | None = None,
+    session: str | None = None,
+    history: str | None = None,
+    out_dir: str | Path | None = None,
+) -> None:
+    """Estimate and plot single-sideband phase noise from clock crossings.
+
+    Pipeline: crossing timestamps -> jitter (vs an ideal f_osc clock) ->
+    phase (rad) -> FFT -> one-sided PSD -> /2 for SSB -> dBc/Hz, plotted
+    against offset frequency in [f_min, f_max] Hz on a log-x axis.
+
+    The raw per-bin PSD is noisy (single FFT, no averaging), so a
+    log-frequency-binned average is overlaid on top -- averaged in linear
+    power (not naive dB averaging) at `points_per_decade` bins, to make the
+    noise floor visible under the point-to-point fluctuation.
+
+    e.g. plot_phase_noise("clk_out", f_osc=1e9, f_min=1e3, f_max=100e6)
+    """
+    import numpy as np
+
+    jitter = get_jitter(
+        signal, f_osc, threshold, edge,
+        client=client, session=session, history=history, out_dir=out_dir,
+    )
+    print(f"[phase_noise] got {len(jitter)} edges, computing FFT...")
     phase = jitter * 2 * np.pi * f_osc    # radians
 
+    period = 1.0 / f_osc
     num_samples = len(phase)
     spectrum = np.fft.rfft(phase)
     freqs = np.fft.rfftfreq(num_samples, d=period)
@@ -243,14 +303,38 @@ def plot_phase_noise(
     phase_noise_dbc_hz = 10 * np.log10(psd / 2.0)
 
     mask = (freqs >= f_min) & (freqs <= f_max)
+    f_plot = freqs[mask]
+    l_db_plot = phase_noise_dbc_hz[mask]
+
+    print(f"[phase_noise] FFT done, smoothing to {points_per_decade:.0f} points/decade...")
+
+    # Log-frequency-bin average, computed in linear power (10^(dB/10)) then
+    # converted back to dB -- averaging dB values directly would understate
+    # the true average power.
+    num_bins = max(1, int(round(points_per_decade * np.log10(f_max / f_min))))
+    bin_edges = np.logspace(np.log10(f_min), np.log10(f_max), num_bins + 1)
+    bin_idx = np.digitize(f_plot, bin_edges)
+    linear_power = 10 ** (l_db_plot / 10)
+
+    smooth_f, smooth_db = [], []
+    for b in range(1, len(bin_edges)):
+        sel = bin_idx == b
+        if not np.any(sel):
+            continue
+        smooth_f.append(np.sqrt(bin_edges[b - 1] * bin_edges[b]))
+        smooth_db.append(10 * np.log10(linear_power[sel].mean()))
 
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(8, 4))
-    plt.semilogx(freqs[mask], phase_noise_dbc_hz[mask])
+    plt.semilogx(f_plot, l_db_plot, color="0.75", linewidth=0.7, label="raw PSD")
+    plt.semilogx(smooth_f, smooth_db, color="C0", linewidth=2,
+                 label=f"average ({points_per_decade:.0f}/decade)")
     plt.xlabel("offset frequency (Hz)")
     plt.ylabel("phase noise (dBc/Hz)")
     plt.title(f"{signal} phase noise")
     plt.grid(True, which="both", ls=":")
+    plt.legend()
     plt.tight_layout()
+    print("[phase_noise] opening plot window...")
     plt.show()
